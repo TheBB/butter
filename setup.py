@@ -16,6 +16,7 @@ setup(
     },
     install_requires=[
         'click',
+        'inflect',
         'pyqt5',
         'pyxdg',
         'sqlalchemy',

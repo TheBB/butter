@@ -6,7 +6,7 @@ import sys
 import click
 import xdg.BaseDirectory
 
-from .db import Database
+from .db import Database, DatabaseLoader
 
 
 def ensure_dir(path):
@@ -17,16 +17,26 @@ def ensure_dir(path):
 class DatabaseParamType(click.ParamType):
     name = 'database'
 
+    def __init__(self, loader):
+        super(DatabaseParamType, self).__init__()
+        self.loader = loader
+
     def convert(self, value, param, ctx):
-        if isinstance(value, Database):
+        exp_type = DatabaseLoader if self.loader else Database
+        if isinstance(value, exp_type):
             return value
         try:
             cfg = ctx.find_object(Config)
-            return cfg.database(value)
+            loader = cfg.database_loader(value)
+            if self.loader:
+                return loader
+            else:
+                return loader.database()
         except Exception as e:
             self.fail("Failed to open database '{}': {}".format(value, e))
 
-DATABASE = DatabaseParamType()
+DATABASE_LOADER = DatabaseParamType(True)
+DATABASE = DatabaseParamType(False)
 
 
 class Config:
@@ -57,19 +67,23 @@ class Config:
     def databases(self):
         return sorted(listdir(self.db_path))
 
-    def default_database(self):
+    def default_database_name(self):
         dbs = self.databases()
         if len(dbs) == 1:
             return dbs[0]
         return None
 
-    def database(self, name):
+    def database_loader(self, name):
         assert name in self.databases()
-        return Database(name, join(self.db_path, name))
+        return DatabaseLoader(name, join(self.db_path, name))
 
-    def db_argument(self, argname='db'):
+    def database(self, name):
+        return self.database_loader(name).database()
+
+    def db_argument(self, argname='db', loader=False):
+        kind = DATABASE_LOADER if loader else DATABASE
         def decorator(fn):
-            return click.argument(argname, type=DATABASE, default=self.default_database())(fn)
+            return click.argument(argname, type=kind, default=self.default_database_name())(fn)
         return decorator
 
 
