@@ -1,7 +1,8 @@
 from os import listdir
-from os.path import basename, join, splitext
+from os.path import basename, exists, join, splitext
 from subprocess import run, PIPE
 import re
+import readline
 import sys
 
 import inflect
@@ -23,15 +24,15 @@ def set_paths(obj, path):
     obj.path = path
 
 
-def rsync(source, destination, say=None):
+def rsync(source, destination, say=False):
     ret = run(['rsync', '-a', '--info=stats2', '--delete', source, destination],
               check=True, stdout=PIPE)
     stdout = ret.stdout.decode()
     nnew = int(re.search(r'Number of created files: (?P<n>\d+)', stdout).group('n'))
     ndel = int(re.search(r'Number of deleted files: (?P<n>\d+)', stdout).group('n'))
-    if say or say is None and nnew > 0:
+    if say or nnew > 0:
         print('{} new'.format(nnew))
-    if say or say is None and ndel > 0:
+    if say or ndel > 0:
         print('{} deleted'.format(ndel))
     return nnew, ndel
 
@@ -49,8 +50,8 @@ class DatabaseLoader:
             cfg = yaml.load(f)
         self.cfg = cfg
 
-    def sync(self, verbose=None):
-        if 'sync' not in self.cfg or 'remote' not in self.cfg['sync']:
+    def sync(self, push=True, pull=True, stage=True, verbose=False):
+        if (push or pull) and ('sync' not in self.cfg or 'remote' not in self.cfg['sync']):
             raise Exception('No remote configured')
 
         print('Synchronizing {}...'.format(self.name))
@@ -70,7 +71,8 @@ class DatabaseLoader:
         if deleted_on_hd or verbose:
             n = len(deleted_on_hd)
             print('{} {} deleted from disk, deleting also from database'.format(n, p.plural('image', n)))
-            delete_ids.update(deleted_on_hd)
+            for c in deleted_on_hd:
+                delete_ids.add(int(splitext(basename(c))[0][:-1]))
 
         deleted_in_db = existing_hd - existing_db
         if deleted_in_db or verbose:
@@ -79,24 +81,104 @@ class DatabaseLoader:
             for fn in deleted_in_db:
                 run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
 
-        remote_contents = join(self.cfg['sync']['remote'], 'contents') + '/'
-        local_contents = self.img_root + '/'
+        if pull or push:
+            remote_contents = join(self.cfg['sync']['remote'], 'contents') + '/'
+            local_contents = self.img_root + '/'
 
-        print('Fetching data from remote...')
-        nnew, ndel = rsync(remote_contents, local_contents, say=verbose)
+        if pull:
+            print('Fetching data from remote...')
+            nnew, ndel = rsync(remote_contents, local_contents, say=verbose)
 
-        # TODO: Delete images in `delete_ids`
+        db = self.database()
 
-        # TODO: Staging
-        for fn in listdir(self.staging_root):
-            print('Staged: {}'.format(fn))
-            run_gui(program=single_image(join(self.staging_root, fn)))
+        if delete_ids:
+            for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
+                db.delete(pic)
+            db.session.commit()
 
-        print('Sending data to remote...')
-        nnew, ndel = rsync(local_contents, remote_contents, say=verbose)
+        if stage:
+            for fn in listdir(self.staging_root):
+                self.flag(join(self.staging_root, fn), db)
+
+        if push:
+            print('Sending data to remote...')
+            nnew, ndel = rsync(local_contents, remote_contents, say=verbose)
+
+    def flag(self, fn, db):
+        print('Staged: {}'.format(fn))
+        run_gui(program=single_image(join(self.staging_root, fn)))
+        extension = splitext(fn)[-1].lower()
+        if extension == '.jpeg':
+            extension = '.jpg'
+
+        pic = db.Picture()
+        pic.extension = extension[1:]
+        while True:
+            s = input('>>> ')
+            if s == 'view':
+                run_gui(program=single_image(fn))
+            elif s in {'skip', 'done'}:
+                if s == 'skip':
+                    pic = None
+                break
+            elif s == '?':
+                print(pic)
+            else:
+                try:
+                    if '=' in s:
+                        key, value = s.split('=')
+                        pic.assign_field(key, eval(value))
+                    else:
+                        value = True
+                        if s.startswith('not'):
+                            value = False
+                            s = s[3:]
+                        pic.assign_field(s, value)
+                except AttributeError as e:
+                    print(e)
+
+        if pic:
+            run(['mv', fn, pic.filename], stdout=PIPE, check=True)
+            db.session.add(pic)
+            db.session.commit()
+            print('Committed as {}'.format(basename(pic.filename)))
+
 
     def database(self):
         return Database(self.name, self.path)
+
+
+class Field:
+
+    def __init__(self, key, type, aliases=[]):
+        self.key = key
+        self.type = type
+        self.aliases = {a.lower() for a in aliases}
+        self.aliases.add(key.lower())
+
+    def python_type(self):
+        return {
+            'bool': bool,
+            'int': int,
+        }[self.type]
+
+    def sql_type(self):
+        return {
+            'bool': Boolean,
+            'int': Integer,
+        }[self.type]
+
+    def default(self):
+        return {
+            'bool': False,
+            'int': 0,
+        }[self.type]
+
+    def column(self):
+        return Column(self.key, type_=self.sql_type(), nullable=False, default=self.default())
+
+    def matches(self, key):
+        return key.lower() in self.aliases
 
 
 class Database:
@@ -119,6 +201,7 @@ class Database:
     def setup_db(self):
         class Picture:
             root = self.img_root
+            fields = []
 
             @property
             def filename(self):
@@ -127,24 +210,27 @@ class Database:
             def __repr__(self):
                 return '<Pic {}>'.format(self.filename)
 
+            def assign_field(self, key, value):
+                key = key.strip().lower()
+                for field in self.fields:
+                    if field.matches(key):
+                        setattr(self, field.key, value)
+                        return
+                raise AttributeError("No such field: '{}'".format(key))
+
+            def __str__(self):
+                return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
+                                 for field in self.fields)
+
         columns = [
             Column('id', Integer, primary_key=True),
             Column('extension', String, nullable=False),
             Column('delt', Boolean, nullable=False, default=False),
         ]
         for c in self.cfg['fields']:
-            if isinstance(c, str):
-                kind = Integer if c.startswith('num_') else Boolean
-                name = c.replace('_', ' ').title()
-                key = c
-            else:
-                kind = {'int': Integer, 'bool': Boolean}[c['type']]
-                name = c['title']
-                key = c['key']
-            default = {Integer: 0, Boolean: False}[kind]
-            col = Column(key, type_=kind, nullable=False, default=default)
-            col.title = name
-            columns.append(col)
+            field = Field(**c)
+            columns.append(field.column())
+            Picture.fields.append(field)
 
         self.engine = create_engine('sqlite:///{}'.format(self.sql_file))
         metadata = MetaData(bind=self.engine)
@@ -168,3 +254,8 @@ class Database:
 
     def delete_ids(self):
         return {p.id for p in self.query().filter(self.Picture.delt == True)}
+
+    def delete(self, pic):
+        if exists(pic.filename):
+            run(['rm', pic.filename], check=True)
+        self.session.delete(pic)

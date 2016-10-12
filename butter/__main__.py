@@ -32,9 +32,14 @@ def gui(db):
     run_gui(db=db)
 
 @main.command()
+@click.option('--push/--no-push', default=True)
+@click.option('--pull/--no-pull', default=True)
+@click.option('--stage/--no-stage', default=True)
+@click.option('-v', '--verbose', default=False, is_flag=True)
 @cfg.db_argument(loader=True)
-def sync(db):
-    db.sync(True)
+def sync(db, **kwargs):
+    """Synchronize a database."""
+    db.sync(**kwargs)
 
 
 if __name__ == '__main__':
