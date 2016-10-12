@@ -23,8 +23,8 @@ class DatabaseParamType(click.ParamType):
         try:
             cfg = ctx.find_object(Config)
             return cfg.database(value)
-        except:
-            self.fail("No such database: '{}'".format(value))
+        except Exception as e:
+            self.fail("Failed to open database '{}': {}".format(value, e))
 
 DATABASE = DatabaseParamType()
 
