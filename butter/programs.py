@@ -44,12 +44,19 @@ class Slideshow(Program):
 
     def __init__(self, m, picker=None):
         m.register(self)
-        self.picker = picker or m.db.default_picker()
+        self.picker = picker or m.db.picker()
         self.pic(m)
 
     @bind()
     def pic(self, m):
         m.show_image(self.picker.get())
+
+    @bind('P')
+    def select_picker(self, m):
+        picker = m.get_picker()
+        if picker:
+            self.picker = picker
+        self.pic(m)
 
 
 class SingleImage(Program):

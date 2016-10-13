@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import (
     QPushButton, QSizePolicy, QSlider, QSpinBox, QVBoxLayout, QWidget
 )
 
+from ..pickers import UnionPicker
+
+
 class ImageView(QLabel):
 
     def __init__(self):
@@ -41,85 +44,84 @@ class ImageView(QLabel):
         self.resize()
 
 
-# class ButtonsWidget(QWidget):
+class ButtonsWidget(QWidget):
 
-#     def __init__(self, target):
-#         super(ButtonsWidget, self).__init__()
+    def __init__(self, target):
+        super(ButtonsWidget, self).__init__()
 
-#         cancel_btn = QPushButton('Cancel')
-#         cancel_btn.clicked.connect(target.reject)
-#         cancel_btn.setDefault(False)
-#         cancel_btn.setAutoDefault(False)
+        cancel_btn = QPushButton('Cancel')
+        cancel_btn.clicked.connect(target.reject)
+        cancel_btn.setDefault(False)
+        cancel_btn.setAutoDefault(False)
 
-#         ok_btn = QPushButton('OK')
-#         ok_btn.setDefault(True)
-#         ok_btn.clicked.connect(target.accept)
+        ok_btn = QPushButton('OK')
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(target.accept)
 
-#         self.setLayout(QHBoxLayout())
-#         self.layout().addWidget(cancel_btn)
-#         self.layout().addWidget(ok_btn)
+        self.setLayout(QHBoxLayout())
+        self.layout().addWidget(cancel_btn)
+        self.layout().addWidget(ok_btn)
 
 
+class PickerWidget(QWidget):
 
-# class PickerWidget(QWidget):
+    def __init__(self, name, picker):
+        super(PickerWidget, self).__init__()
 
-#     def __init__(self, picker):
-#         super(PickerWidget, self).__init__()
+        self.picker = picker
 
-#         self.picker = picker
+        layout = QHBoxLayout()
+        self.setLayout(layout)
 
-#         layout = QHBoxLayout()
-#         self.setLayout(layout)
+        checkbox = QCheckBox(name)
+        checkbox.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
+        checkbox.setMinimumWidth(100)
+        checkbox.stateChanged.connect(self.check)
+        layout.addWidget(checkbox)
+        self.checkbox = checkbox
 
-#         checkbox = QCheckBox(picker.name)
-#         checkbox.setSizePolicy(QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed))
-#         checkbox.setMinimumWidth(100)
-#         checkbox.stateChanged.connect(self.check)
-#         layout.addWidget(checkbox)
-#         self.checkbox = checkbox
+        slider = QSlider(Qt.Horizontal)
+        slider.setMinimumWidth(300)
+        slider.setMinimum(0)
+        slider.setMaximum(100)
+        slider.setValue(100)
+        slider.valueChanged.connect(self.slide)
+        layout.addWidget(slider)
+        self.slider = slider
 
-#         slider = QSlider(Qt.Horizontal)
-#         slider.setMinimumWidth(300)
-#         slider.setMinimum(0)
-#         slider.setMaximum(100)
-#         slider.setValue(100)
-#         slider.valueChanged.connect(self.slide)
-#         layout.addWidget(slider)
-#         self.slider = slider
+        label = QLabel('0%')
+        label.setMinimumWidth(40)
+        label.setAlignment(Qt.AlignRight)
+        layout.addWidget(label)
+        self.label = label
 
-#         label = QLabel('0%')
-#         label.setMinimumWidth(40)
-#         label.setAlignment(Qt.AlignRight)
-#         layout.addWidget(label)
-#         self.label = label
+        layout.setSizeConstraint(QLayout.SetFixedSize)
 
-#         layout.setSizeConstraint(QLayout.SetFixedSize)
+    def check(self, state):
+        self.slider.setVisible(state == Qt.Checked)
+        self.label.setVisible(state == Qt.Checked)
+        if state == Qt.Checked:
+            self.slide(self.slider.value())
+        else:
+            self.slide(0)
 
-#     def check(self, state):
-#         self.slider.setVisible(state == Qt.Checked)
-#         self.label.setVisible(state == Qt.Checked)
-#         if state == Qt.Checked:
-#             self.slide(self.slider.value())
-#         else:
-#             self.slide(0)
+    def slide(self, value):
+        self.label.setText('{}%'.format(value))
 
-#     def slide(self, value):
-#         self.label.setText('{}%'.format(value))
+    @property
+    def checked(self):
+        return self.checkbox.checkState() == Qt.Checked
 
-#     @property
-#     def checked(self):
-#         return self.checkbox.checkState() == Qt.Checked
-
-#     @property
-#     def frequency(self):
-#         return self.slider.value()
+    @property
+    def frequency(self):
+        return self.slider.value()
 
 
 class MessageDialog(QDialog):
 
     def __init__(self, text, callback=None):
         super(MessageDialog, self).__init__()
-        self.setWindowTitle('PTools')
+        self.setWindowTitle('Butter')
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(Qt.FramelessWindowHint)
 
@@ -127,10 +129,10 @@ class MessageDialog(QDialog):
         self.setLayout(layout)
 
         label = QLabel()
-        label.setStyleSheet('''QLabel {
+        label.setStyleSheet("""QLabel {
             background-color: rgba(0, 0, 0, 200);
             color: rgb(255, 255, 255);
-        }''')
+        }""")
         label.setText(text)
         label.setMargin(20)
 
@@ -150,83 +152,32 @@ class MessageDialog(QDialog):
         self.accept()
 
 
-# class PickerDialog(QDialog):
+class PickerDialog(QDialog):
 
-#     def __init__(self, db):
-#         super(PickerDialog, self).__init__()
-#         self.setWindowTitle('Pickers')
-#         self.db = db
-#         self.widgets = [PickerWidget(p) for p in db.pickers]
+    def __init__(self, db):
+        super(PickerDialog, self).__init__()
+        self.setWindowTitle('Pickers')
+        self.db = db
+        self.widgets = [PickerWidget(name, p) for name, p in db.pickers.items()]
 
-#         layout = QVBoxLayout()
-#         self.setLayout(layout)
+        layout = QVBoxLayout()
+        self.setLayout(layout)
 
-#         for w in self.widgets:
-#             layout.addWidget(w)
+        for w in self.widgets:
+            layout.addWidget(w)
 
-#         layout.addWidget(ButtonsWidget(self))
+        layout.addWidget(ButtonsWidget(self))
 
-#         self.setFixedSize(self.sizeHint())
-#         for w in self.widgets:
-#             w.check(False)
+        self.setFixedSize(self.sizeHint())
+        for w in self.widgets:
+            w.check(False)
 
-#     def get_picker(self):
-#         union = UnionPicker()
-#         for w in self.widgets:
-#             if w.checked and w.frequency:
-#                 union.add(w.picker, w.frequency)
-#         if not union.pickers:
-#             return self.db.picker()
-#         return union
-
-
-# class FlagsDialog(QDialog):
-
-#     def __init__(self, db):
-#         super(FlagsDialog, self).__init__()
-#         self.setWindowTitle('Flags')
-
-#         layout = QVBoxLayout()
-#         self.setLayout(layout)
-
-#         grid = QGridLayout()
-#         layout.addLayout(grid)
-
-#         self.assignment, self.defaults = {}, {}
-#         for i, c in enumerate(db.custom_columns, start=1):
-#             if isinstance(c.type, Boolean):
-#                 widget = QCheckBox(c.title)
-#                 self.defaults[widget] = Qt.Checked if c.default.arg else Qt.Unchecked
-#                 grid.addWidget(widget, i, 1, 1, 2)
-#             elif isinstance(c.type, Integer):
-#                 label = QLabel(c.title)
-#                 widget = QSpinBox()
-#                 self.defaults[widget] = c.default.arg
-#                 grid.addWidget(label, i, 1)
-#                 grid.addWidget(widget, i, 2)
-#             self.assignment[c.key] = widget
-
-#         layout.addWidget(ButtonsWidget(self))
-
-#         self.set_defaults()
-
-#     def exec_(self):
-#         self.set_defaults()
-#         return super(FlagsDialog, self).exec_()
-
-#     def set_defaults(self):
-#         for w, v in self.defaults.items():
-#             if isinstance(w, QCheckBox):
-#                 w.setCheckState(Qt.Checked if v else Qt.Unchecked)
-#             elif isinstance(w, QSpinBox):
-#                 w.setValue(v)
-
-#     def get_flags(self):
-#         ret = {}
-#         for k, w in self.assignment.items():
-#             if isinstance(w, QCheckBox):
-#                 ret[k] = w.checkState() == Qt.Checked
-#             elif isinstance(w, QSpinBox):
-#                 ret[k] = w.value()
-
-#         return ret
+    @property
+    def picker(self):
+        union = UnionPicker(self.db)
+        for w in self.widgets:
+            if w.checked and w.frequency:
+                union.add(w.picker, w.frequency)
+        if not union.pickers:
+            return self.db.picker()
+        return union

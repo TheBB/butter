@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from os import listdir
 from os.path import basename, exists, join, splitext
 from subprocess import run, PIPE
@@ -12,7 +12,7 @@ from sqlalchemy.orm import mapper, create_session
 from sqlalchemy.sql import func
 import yaml
 
-from .pickers import RandomPicker
+from .pickers import FilterPicker, RandomPicker, UnionPicker
 from .programs import SingleImage
 from .gui import run_gui
 
@@ -144,7 +144,6 @@ class DatabaseLoader:
             run(['mv', fn, pic.filename], stdout=PIPE, check=True)
             print('Committed as {}'.format(basename(pic.filename)))
 
-
     def database(self):
         return Database(self.name, self.path)
 
@@ -188,6 +187,7 @@ class Database:
 
         self.load_config()
         self.setup_db()
+        self.make_pickers()
 
     def __repr__(self):
         return '<Database {}>'.format(self.name)
@@ -248,9 +248,6 @@ class Database:
     def query(self):
         return self.session.query(self.Picture)
 
-    def default_picker(self):
-        return RandomPicker(self)
-
     def delete_ids(self):
         return {p.id for p in self.query().filter(self.Picture.delt == True)}
 
@@ -258,3 +255,29 @@ class Database:
         if exists(pic.filename):
             run(['rm', pic.filename], check=True)
         self.session.delete(pic)
+
+    def picker(self, filters=[]):
+        if not filters:
+            if hasattr(self, 'default_picker'):
+                return self.default_picker
+            return RandomPicker(self)
+
+        if isinstance(filters[0], list):
+            picker = UnionPicker(self)
+            for f in filters:
+                freq = 1.0
+                if f and isinstance(f[0], float):
+                    freq, f = f[0], f[1:]
+                picker.add(self.picker(f), freq)
+            return picker
+
+        filters = [eval(s, None, self.Picture.__dict__) for s in filters]
+        return FilterPicker(self, *filters)
+
+    def make_pickers(self):
+        self.pickers = OrderedDict()
+        if not 'pickers' in self.cfg:
+            return
+        for spec in self.cfg['pickers']:
+            name, filters = next(iter(spec.items()))
+            self.pickers[name] = self.picker(filters)

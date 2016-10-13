@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox
 
-from .utils import ImageView, MessageDialog #, FlagsDialog, PickerDialog
+from .utils import ImageView, MessageDialog, PickerDialog
 from ..programs import Slideshow
 
 
@@ -40,8 +40,7 @@ class MainWindow(QMainWindow):
         self.paused = False
         self.current_pic = None
 
-        # self.picker_dialog = PickerDialog(self.db)
-        # self.flags_dialog = FlagsDialog(self.db)
+        self.picker_dialog = PickerDialog(self.db)
 
         self.programs = []
 
@@ -53,7 +52,6 @@ class MainWindow(QMainWindow):
 
     def unregister(self, *args, **kwargs):
         self.programs.pop()
-        # self.programs[-1].make_current(self, *args, **kwargs)
 
     @property
     def program(self):
@@ -70,6 +68,11 @@ class MainWindow(QMainWindow):
         retval = []
         MessageDialog(text, lambda e: retval.append(e))
         return retval[0]
+
+    def get_picker(self):
+        if self.picker_dialog.exec_() == QDialog.Accepted:
+            return self.picker_dialog.picker
+        return None
 
     # def start_timer(self, delay, callback):
     #     timer = QTimer(self)
