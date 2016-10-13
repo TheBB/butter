@@ -138,9 +138,9 @@ class DatabaseLoader:
                     print(e)
 
         if pic:
-            run(['mv', fn, pic.filename], stdout=PIPE, check=True)
             db.session.add(pic)
             db.session.commit()
+            run(['mv', fn, pic.filename], stdout=PIPE, check=True)
             print('Committed as {}'.format(basename(pic.filename)))
 
 
