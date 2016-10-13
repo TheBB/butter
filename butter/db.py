@@ -1,3 +1,4 @@
+from collections import namedtuple
 from os import listdir
 from os.path import basename, exists, join, splitext
 from subprocess import run, PIPE
@@ -12,7 +13,7 @@ from sqlalchemy.sql import func
 import yaml
 
 from .pickers import RandomPicker
-from .programs import single_image
+from .programs import SingleImage
 from .gui import run_gui
 
 
@@ -106,7 +107,7 @@ class DatabaseLoader:
 
     def flag(self, fn, db):
         print('Staged: {}'.format(fn))
-        run_gui(program=single_image(join(self.staging_root, fn)))
+        run_gui(program=SingleImage.factory(fn))
         extension = splitext(fn)[-1].lower()
         if extension == '.jpeg':
             extension = '.jpg'
@@ -116,7 +117,7 @@ class DatabaseLoader:
         while True:
             s = input('>>> ')
             if s == 'view':
-                run_gui(program=single_image(fn))
+                run_gui(program=SingleImage.factory(fn))
             elif s in {'skip', 'done'}:
                 if s == 'skip':
                     pic = None
@@ -148,37 +149,35 @@ class DatabaseLoader:
         return Database(self.name, self.path)
 
 
-class Field:
+class Field(Column):
+
+    FieldType = namedtuple('FieldType', ['pytype', 'sqltype', 'default'])
+
+    __types = {
+        'bool': FieldType(bool, Boolean, False),
+        'int': FieldType(int, Integer, 0),
+    }
 
     def __init__(self, key, type, aliases=[]):
-        self.key = key
-        self.type = type
-        self.aliases = {a.lower() for a in aliases}
-        self.aliases.add(key.lower())
+        self.typestr = type
+        super(Field, self).__init__(key, type_=self.sql_type, nullable=False, default=self.default_value)
+        self.__aliases = {a.lower() for a in aliases}
+        self.__aliases.add(key.lower())
 
-    def python_type(self):
-        return {
-            'bool': bool,
-            'int': int,
-        }[self.type]
+    @property
+    def py_type(self):
+        return self.__types[self.typestr].pytype
 
+    @property
     def sql_type(self):
-        return {
-            'bool': Boolean,
-            'int': Integer,
-        }[self.type]
+        return self.__types[self.typestr].sqltype
 
-    def default(self):
-        return {
-            'bool': False,
-            'int': 0,
-        }[self.type]
-
-    def column(self):
-        return Column(self.key, type_=self.sql_type(), nullable=False, default=self.default())
+    @property
+    def default_value(self):
+        return self.__types[self.typestr].default
 
     def matches(self, key):
-        return key.lower() in self.aliases
+        return key.lower() in self.__aliases
 
 
 class Database:
@@ -229,7 +228,7 @@ class Database:
         ]
         for c in self.cfg['fields']:
             field = Field(**c)
-            columns.append(field.column())
+            columns.append(field)
             Picture.fields.append(field)
 
         self.engine = create_engine('sqlite:///{}'.format(self.sql_file))

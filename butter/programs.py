@@ -58,5 +58,6 @@ class SingleImage(Program):
         m.register(self)
         m.show_image(img)
 
-def single_image(img):
-    return lambda m: SingleImage(m, img)
+    @classmethod
+    def factory(cls, img):
+        return lambda m: cls(m, img)
