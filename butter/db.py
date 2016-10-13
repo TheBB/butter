@@ -82,8 +82,8 @@ class DatabaseLoader:
                 run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
 
         if pull or push:
-            remote_contents = join(self.cfg['sync']['remote'], 'contents') + '/'
-            local_contents = self.img_root + '/'
+            remote_contents = join(self.cfg['sync']['remote'], 'contents', '')
+            local_contents = join(self.img_root, '')
 
         if pull:
             print('Fetching data from remote...')
