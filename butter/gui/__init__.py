@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox
 
-from .utils import ImageView, MessageDialog, PickerDialog
+from .utils import MainWidget, MessageDialog, PickerDialog
 from ..programs import Slideshow
 
 
@@ -20,6 +20,9 @@ KEY_MAP = {
     Qt.Key_Down: 'DOWN',
     Qt.Key_Left: 'LEFT',
     Qt.Key_Right: 'RIGHT',
+    Qt.Key_Minus: '-',
+    Qt.Key_Plus: '+',
+    Qt.Key_Equal: '=',
 }
 KEY_MAP.update({
     getattr(Qt, 'Key_{}'.format(s.upper())): s
@@ -29,29 +32,35 @@ KEY_MAP.update({
 
 class MainWindow(QMainWindow):
 
-    def __init__(self, db=None, program=Slideshow):
+    default_program = Slideshow
+
+    def __init__(self, db=None, program=None):
         super(MainWindow, self).__init__()
         self.setWindowTitle('Butter')
+        self.setStyleSheet('background-color: black;')
         self.db = db
 
-        image = ImageView()
-        self.setCentralWidget(image)
-        self.image = image
+        main = MainWidget()
+        self.setCentralWidget(main)
+        self.main = main
         self.paused = False
         self.current_pic = None
 
-        self.picker_dialog = PickerDialog(self.db)
+        if db:
+            self.picker_dialog = PickerDialog(self.db)
 
         self.programs = []
 
-        if program:
-            program(self)
+        program = program or self.default_program
+        program(self)
 
     def register(self, program):
         self.programs.append(program)
+        self.status_message(program.message)
 
     def unregister(self, *args, **kwargs):
         self.programs.pop()
+        self.program.make_current(self)
 
     @property
     def program(self):
@@ -59,9 +68,14 @@ class MainWindow(QMainWindow):
 
     def show_image(self, pic):
         self.current_pic = pic
-        self.image.load(pic)
+        self.main.load(pic)
 
-    def show_message(self, msg, align='center'):
+    def status_message(self, value=None):
+        if value is None:
+            value = self.program.message
+        self.main.message(value)
+
+    def popup_message(self, msg, align='center'):
         if isinstance(msg, str):
             msg = [msg]
         text = ''.join('<p align="{}">{}</p>'.format(align, m) for m in msg)
@@ -74,11 +88,11 @@ class MainWindow(QMainWindow):
             return self.picker_dialog.picker
         return None
 
-    # def start_timer(self, delay, callback):
-    #     timer = QTimer(self)
-    #     timer.timeout.connect(lambda: callback(self, timer))
-    #     timer.start(delay)
-    #     return timer
+    def start_timer(self, delay, callback):
+        timer = QTimer(self)
+        timer.timeout.connect(lambda: callback(self))
+        timer.start(delay)
+        return timer
 
     def keyPressEvent(self, event):
         ctrl = event.modifiers() & Qt.ControlModifier
@@ -98,11 +112,13 @@ class MainWindow(QMainWindow):
 
         if text == 'p':
             if self.paused:
-                self.image.load(self.current_pic)
+                self.main.load(self.current_pic)
                 self.program.unpause(self)
+                self.status_message()
             else:
-                self.image.load(None)
+                self.main.load(None)
                 self.program.pause(self)
+                self.status_message('')
             self.paused = not self.paused
             return
 

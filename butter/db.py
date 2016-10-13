@@ -17,15 +17,7 @@ from .programs import SingleImage
 from .gui import run_gui
 
 
-def set_paths(obj, path):
-    obj.sql_file = join(path, 'db.sqlite3')
-    obj.config_file = join(path, 'config.yaml')
-    obj.img_root = join(path, 'contents')
-    obj.staging_root = join(path, 'staging')
-    obj.path = path
-
-
-def rsync(source, destination, say=False):
+def rsync_dir(source, destination, say=False):
     ret = run(['rsync', '-a', '--info=stats2', '--delete', source, destination],
               check=True, stdout=PIPE)
     stdout = ret.stdout.decode()
@@ -35,15 +27,21 @@ def rsync(source, destination, say=False):
         print('{} new'.format(nnew))
     if say or ndel > 0:
         print('{} deleted'.format(ndel))
-    return nnew, ndel
 
 
-class DatabaseLoader:
+def rsync_file(source, destination):
+    run(['rsync', '-a', source, destination], check=True, stdout=PIPE)
+
+
+class AbstractDatabase:
 
     def __init__(self, name, path):
         self.name = name
-        set_paths(self, path)
-
+        self.sql_file = join(path, 'db.sqlite3')
+        self.config_file = join(path, 'config.yaml')
+        self.img_root = join(path, 'contents')
+        self.staging_root = join(path, 'staging')
+        self.path = path
         self.load_config()
 
     def load_config(self):
@@ -51,11 +49,31 @@ class DatabaseLoader:
             cfg = yaml.load(f)
         self.cfg = cfg
 
+    @property
+    def remote(self):
+        try:
+            return self.cfg['sync']['remote']
+        except KeyError:
+            return None
+
+
+class DatabaseLoader(AbstractDatabase):
+
+    def __init__(self, name, path):
+        super(DatabaseLoader, self).__init__(name, path)
+
     def sync(self, push=True, pull=True, stage=True, verbose=False):
-        if (push or pull) and ('sync' not in self.cfg or 'remote' not in self.cfg['sync']):
-            raise Exception('No remote configured')
+        if not self.remote:
+            push = False
+            pull = False
 
         print('Synchronizing {}...'.format(self.name))
+
+        if pull or push:
+            remote_contents = join(self.remote, 'contents', '')
+            local_contents = join(self.img_root, '')
+            remote_sql = join(self.remote, 'db.sqlite3')
+            remote_config = join(self.remote, 'config.yaml')
 
         db = self.database()
         p = inflect.engine()
@@ -82,13 +100,12 @@ class DatabaseLoader:
             for fn in deleted_in_db:
                 run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
 
-        if pull or push:
-            remote_contents = join(self.cfg['sync']['remote'], 'contents', '')
-            local_contents = join(self.img_root, '')
-
         if pull:
             print('Fetching data from remote...')
-            nnew, ndel = rsync(remote_contents, local_contents, say=verbose)
+            rsync_dir(remote_contents, local_contents, say=verbose)
+            rsync_file(remote_sql, self.sql_file)
+            if self.cfg['sync']['sync_config']:
+                rsync_file(remote_config, self.config_file)
 
         db = self.database()
 
@@ -103,7 +120,11 @@ class DatabaseLoader:
 
         if push:
             print('Sending data to remote...')
-            nnew, ndel = rsync(local_contents, remote_contents, say=verbose)
+            rsync_dir(local_contents, remote_contents, say=verbose)
+            rsync_file(self.sql_file, remote_sql)
+            if self.cfg['sync']['sync_config']:
+                rsync_file(self.config_file, remote_config)
+
 
     def flag(self, fn, db):
         print('Staged: {}'.format(fn))
@@ -145,7 +166,7 @@ class DatabaseLoader:
             print('Committed as {}'.format(basename(pic.filename)))
 
     def database(self):
-        return Database(self.name, self.path)
+        return database_class(self.name, self.path)
 
 
 class Field(Column):
@@ -179,13 +200,10 @@ class Field(Column):
         return key.lower() in self.__aliases
 
 
-class Database:
+class Database(AbstractDatabase):
 
     def __init__(self, name, path):
-        self.name = name
-        set_paths(self, path)
-
-        self.load_config()
+        super(Database, self).__init__(name, path)
         self.setup_db()
         self.make_pickers()
 
@@ -216,6 +234,9 @@ class Database:
                         setattr(self, field.key, value)
                         return
                 raise AttributeError("No such field: '{}'".format(key))
+
+            def eval(self, s):
+                return eval(s, self.__dict__)
 
             def __str__(self):
                 return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
@@ -281,3 +302,7 @@ class Database:
         for spec in self.cfg['pickers']:
             name, filters = next(iter(spec.items()))
             self.pickers[name] = self.picker(filters)
+
+
+loader_class = DatabaseLoader
+database_class = Database

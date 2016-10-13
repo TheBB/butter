@@ -16,7 +16,6 @@ class ImageView(QLabel):
         super(ImageView, self).__init__()
         self.setMinimumSize(1,1)
         self.setAlignment(Qt.Alignment(0x84))
-        self.setStyleSheet('QLabel { background-color: black; }')
 
         self.orig_pixmap = None
 
@@ -42,6 +41,32 @@ class ImageView(QLabel):
 
     def resizeEvent(self, event):
         self.resize()
+
+
+class MainWidget(QWidget):
+
+    def __init__(self):
+        super(MainWidget, self).__init__()
+
+        self.image = ImageView()
+        self.label = QLabel()
+        self.label.setMaximumHeight(25)
+        self.label.setStyleSheet('color: rgb(200, 200, 200);')
+
+        font = QFont()
+        font.setPixelSize(20)
+        font.setWeight(QFont.Bold)
+        self.label.setFont(font)
+
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(self.image)
+        self.layout().addWidget(self.label)
+
+    def load(self, *args, **kwargs):
+        self.image.load(*args, **kwargs)
+
+    def message(self, msg):
+        self.label.setText('<div align="center">{}</div>'.format(msg))
 
 
 class ButtonsWidget(QWidget):

@@ -6,7 +6,7 @@ import sys
 import click
 import xdg.BaseDirectory
 
-from .db import Database, DatabaseLoader
+from .db import database_class, loader_class
 
 
 def ensure_dir(path):
@@ -22,7 +22,7 @@ class DatabaseParamType(click.ParamType):
         self.loader = loader
 
     def convert(self, value, param, ctx):
-        exp_type = DatabaseLoader if self.loader else Database
+        exp_type = loader_class if self.loader else database_class
         if isinstance(value, exp_type):
             return value
         try:
@@ -75,7 +75,7 @@ class Config:
 
     def database_loader(self, name):
         assert name in self.databases()
-        return DatabaseLoader(name, join(self.db_path, name))
+        return loader_class(name, join(self.db_path, name))
 
     def database(self, name):
         return self.database_loader(name).database()
