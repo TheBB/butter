@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
     def unregister(self, *args, **kwargs):
         self.programs.pop()
         self.program.make_current(self)
+        self.status_message(self.program.message)
 
     @property
     def program(self):
