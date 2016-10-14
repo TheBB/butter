@@ -109,7 +109,6 @@ class Slideshow(FromPicker):
             self.timer.stop()
             self.timer = None
         else:
-            print(self.delay)
             self.timer = m.start_timer(self.delay, self.pic)
 
     @bind('+', '=')
