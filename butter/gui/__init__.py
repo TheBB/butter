@@ -6,6 +6,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox
 
 from .utils import MainWidget, MessageDialog, PickerDialog
+from ..main import Main
 from ..programs import Slideshow
 
 
@@ -30,15 +31,13 @@ KEY_MAP.update({
 })
 
 
-class MainWindow(QMainWindow):
-
-    default_program = Slideshow
+class MainWindow(Main, QMainWindow):
 
     def __init__(self, db=None, program=None):
-        super(MainWindow, self).__init__()
+        Main.__init__(self, db)
+        QMainWindow.__init__(self)
         self.setWindowTitle('Butter')
         self.setStyleSheet('background-color: black;')
-        self.db = db
 
         main = MainWidget()
         self.setCentralWidget(main)
@@ -49,23 +48,8 @@ class MainWindow(QMainWindow):
         if db:
             self.picker_dialog = PickerDialog(self.db)
 
-        self.programs = []
-
         program = program or self.default_program
         program(self)
-
-    def register(self, program):
-        self.programs.append(program)
-        self.status_message(program.message)
-
-    def unregister(self, *args, **kwargs):
-        self.programs.pop()
-        self.program.make_current(self)
-        self.status_message(self.program.message)
-
-    @property
-    def program(self):
-        return self.programs[-1]
 
     def show_image(self, pic):
         self.current_pic = pic

@@ -26,7 +26,7 @@ class DatabaseParamType(click.ParamType):
         if isinstance(value, exp_type):
             return value
         try:
-            cfg = ctx.find_object(Config)
+            cfg = ctx.find_object(MasterConfig)
             loader = cfg.database_loader(value)
             if self.loader:
                 return loader
@@ -39,7 +39,7 @@ DATABASE_LOADER = DatabaseParamType(True)
 DATABASE = DatabaseParamType(False)
 
 
-class Config:
+class MasterConfig:
 
     def __init__(self):
         self.config_path = xdg.BaseDirectory.save_config_path('butter')
@@ -50,7 +50,8 @@ class Config:
         self.db_path = join(self.config_path, 'databases')
         ensure_dir(self.db_path)
 
-    def add_commands(self, main):
+    def load_plugins(self, main=None):
+        sys.path.append(self.plugin_path)
         for name in listdir(self.plugin_path):
             path = join(self.plugin_path, name)
             if isdir(path):
@@ -58,9 +59,11 @@ class Config:
                     spec = importlib.util.spec_from_file_location(name, join(path, '__init__.py'))
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
-                    if hasattr(module, 'commands'):
+                    if hasattr(module, 'commands') and main:
                         for cmd in module.commands():
                             main.add_command(cmd)
+                    if hasattr(module, 'enable'):
+                        module.enable()
                 except Exception as e:
                     print("Failed to load plugin '{}': {}".format(name, e), file=sys.stderr)
 
@@ -86,5 +89,4 @@ class Config:
             return click.argument(argname, type=kind, default=self.default_database_name())(fn)
         return decorator
 
-
-cfg = Config()
+cfg = MasterConfig()

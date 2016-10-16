@@ -12,9 +12,9 @@ from sqlalchemy.orm import mapper, create_session
 from sqlalchemy.sql import func
 import yaml
 
+from .gui import run_gui
 from .pickers import FilterPicker, RandomPicker, UnionPicker
 from .programs import SingleImage
-from .gui import run_gui
 
 
 def rsync_dir(source, destination, say=False):

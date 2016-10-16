@@ -11,7 +11,7 @@ def main(ctx):
     if ctx.invoked_subcommand is None:
         ctx.invoke(gui)
 
-cfg.add_commands(main)
+cfg.load_plugins(main)
 
 @main.command('list')
 def list_dbs():

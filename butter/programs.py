@@ -64,6 +64,9 @@ class Program(metaclass=ProgramMeta):
     def make_current(self, m):
         pass
 
+    def make_uncurrent(self, m):
+        pass
+
     @classmethod
     def factory(cls, *args, **kwargs):
         return lambda m: cls(m, *args, **kwargs)
@@ -95,6 +98,14 @@ class Slideshow(FromPicker):
         self.timer = None
         self.delay = 1000.0
         self.pic(m)
+
+    def make_uncurrrent(self):
+        if self.timer:
+            self.timer.stop()
+
+    def make_currrent(self):
+        if self.timer:
+            self.timer.start()
 
     @bind('P')
     def select_picker(self, m):
