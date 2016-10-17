@@ -135,8 +135,13 @@ class DatabaseLoader(AbstractDatabase):
 
         pic = db.Picture()
         pic.extension = extension[1:]
+        modified = False
         while True:
-            s = input('>>> ')
+            s = input('>>> ').strip()
+            if s == '':
+                if not modified:
+                    pic = None
+                break
             if s == 'view':
                 run_gui(program=SingleImage.factory(fn))
             elif s in {'skip', 'done'}:
@@ -156,6 +161,7 @@ class DatabaseLoader(AbstractDatabase):
                             value = False
                             s = s[3:]
                         pic.assign_field(s, value)
+                        modified = True
                 except AttributeError as e:
                     print(e)
 
