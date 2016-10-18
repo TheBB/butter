@@ -13,7 +13,7 @@ class FilterPicker:
         return self.db.query().filter(*self.filters).order_by(func.random()).first()
 
     def get_all(self):
-        return self.db.query()
+        return self.db.query().filter(*self.filters)
 
 
 class RandomPicker(FilterPicker):
