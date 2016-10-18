@@ -80,8 +80,8 @@ class MasterConfig:
         assert name in self.databases()
         return loader_class(name, join(self.db_path, name))
 
-    def database(self, name):
-        return self.database_loader(name).database()
+    def database(self, name, *args, **kwargs):
+        return self.database_loader(name).database(*args, **kwargs)
 
     def db_argument(self, argname='db', loader=False):
         kind = DATABASE_LOADER if loader else DATABASE

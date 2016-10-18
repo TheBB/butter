@@ -171,8 +171,8 @@ class DatabaseLoader(AbstractDatabase):
             run(['mv', fn, pic.filename], stdout=PIPE, check=True)
             print('Committed as {}'.format(basename(pic.filename)))
 
-    def database(self):
-        return database_class(self.name, self.path)
+    def database(self, *args, **kwargs):
+        return database_class(self.name, self.path, *args, **kwargs)
 
 
 class Field(Column):
