@@ -42,5 +42,12 @@ def sync(db, **kwargs):
     db.sync(**kwargs)
 
 
+@main.command('push-config')
+@cfg.db_argument(loader=True)
+def push_config(db):
+    """Push config to remote."""
+    db.push_config()
+
+
 if __name__ == '__main__':
     main()

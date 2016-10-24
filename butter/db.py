@@ -62,6 +62,12 @@ class DatabaseLoader(AbstractDatabase):
     def __init__(self, name, path):
         super(DatabaseLoader, self).__init__(name, path)
 
+    def push_config(self):
+        if not self.remote:
+            return
+        remote_config = join(self.remote, 'config.yaml')
+        rsync_file(self.config_file, remote_config)
+
     def sync(self, push=True, pull=True, stage=True, verbose=False):
         if not self.remote:
             push = False
