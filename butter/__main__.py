@@ -1,4 +1,5 @@
 import click
+from imgurpython import ImgurClient
 from . import cfg
 from .gui import run_gui
 
@@ -47,6 +48,22 @@ def sync(db, **kwargs):
 def push_config(db):
     """Push config to remote."""
     db.push_config()
+
+
+@main.command()
+@cfg.db_argument()
+def imgur(db):
+    client = ImgurClient(db.cfg['imgur']['id'], db.cfg['imgur']['secret'])
+    url = client.get_auth_url('pin')
+    print('Please visit {}'.format(url))
+    pin = input('PIN: ')
+    credentials = client.authorize(pin, 'pin')
+    client.set_user_auth(credentials['access_token'], credentials['refresh_token'])
+
+    for pic in db.query().limit(5):
+        image = client.upload_from_path(pic.filename, {'nsfw': True}, anon=False)
+        print(pic.filename, image)
+
 
 
 if __name__ == '__main__':
