@@ -107,6 +107,13 @@ class MainWindow(Main, QMainWindow):
             self.paused = not self.paused
             return
 
+        if text == 'd':
+            try:
+                self.current_pic.mark_delete()
+            except AttributeError:
+                pass
+            return
+
         if text in {'q', 'ESC'}:
             self.close()
             return

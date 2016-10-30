@@ -230,6 +230,7 @@ class Database(AbstractDatabase):
     def setup_db(self):
         class Picture:
             root = self.img_root
+            db = self
             fields = []
 
             @property
@@ -253,6 +254,10 @@ class Database(AbstractDatabase):
             def __str__(self):
                 return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
                                  for field in self.fields)
+
+            def mark_delete(self):
+                self.delt = True
+                self.db.session.commit()
 
         columns = [
             Column('id', Integer, primary_key=True),
