@@ -22,5 +22,6 @@ setup(
         'sqlalchemy',
         'imagehash',
         'pillow',
+        'tqdm',
     ],
 )
