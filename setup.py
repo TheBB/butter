@@ -20,5 +20,7 @@ setup(
         'pyqt5',
         'pyxdg',
         'sqlalchemy',
+        'imagehash',
+        'pillow',
     ],
 )

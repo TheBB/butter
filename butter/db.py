@@ -289,11 +289,14 @@ class Database(AbstractDatabase):
     def query(self):
         return self.session.query(self.Picture)
 
+    def pic_by_id(self, id):
+        return self.query().get(id)
+
     def delete_pics(self):
         return self.query().filter(self.Picture.delt == True)
 
     def delete_ids(self):
-        return {p.id for p in self.query().filter(self.Picture.delt == True)}
+        return {p.id for p in self.delete_pics()}
 
     def delete(self, pic):
         if exists(pic.filename):

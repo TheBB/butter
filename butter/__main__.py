@@ -1,6 +1,13 @@
 import click
+import imagehash
+import inflect
+from itertools import combinations
+import multiprocessing
+from PIL import Image
+from tqdm import tqdm
 from . import cfg
 from .gui import run_gui
+from .programs import Images
 
 
 @click.group(invoke_without_command=True)
@@ -58,6 +65,49 @@ def push_config(db):
 def show_deletes(db):
     pics = list(db.delete_pics())
     if pics:
+        run_gui(program=Images.factory(*pics))
+
+
+def image_hash(pic_id, pic_filename):
+    return (pic_id, imagehash.phash(Image.open(pic_filename)))
+
+def image_diff(a, b):
+    pic_a, hash_a = a
+    pic_b, hash_b = b
+    return (pic_a, pic_b, abs(hash_a - hash_b))
+
+@main.command()
+@click.option('--threshold', '-t', type=int, default=9)
+@click.option('--nprocs', type=int, default=1)
+@click.option('--chunksize', type=int, default=20)
+@cfg.db_argument()
+def deduplicate(db, threshold, nprocs, chunksize):
+    """Find duplicate images."""
+    pics = {pic.id: pic.filename for pic in db.query()}
+    pool = multiprocessing.Pool(nprocs)
+    hashes = pool.starmap(image_hash, tqdm(pics.items(), desc='Computing hashes'),
+                          chunksize=chunksize)
+    pool.close()
+
+    # Could use multiprocessing here too but it seems communication-dominated
+    ndiffs = len(hashes) * (len(hashes) - 1) // 2
+    diffs = [(pic_a, pic_b, abs(hash_a - hash_b))
+             for (pic_a, hash_a), (pic_b, hash_b)
+             in tqdm(combinations(hashes, 2), total=ndiffs, desc='Computing diffs')
+             if abs(hash_a - hash_b) <= threshold]
+
+    clusters = {}
+    for id_a, id_b, diff in diffs:
+        cluster = clusters.get(id_a, set()) | clusters.get(id_b, set()) | {id_a, id_b}
+        for id in cluster:
+            clusters[id] = cluster
+    clusters = {frozenset(cluster) for cluster in clusters.values()}
+
+    p = inflect.engine()
+    print('Found {} {}'.format(len(clusters), p.plural('cluster', len(clusters))))
+    input('Press any key to continue...')
+    for cluster in clusters:
+        pics = [db.pic_by_id(id) for id in cluster]
         run_gui(program=Images.factory(*pics))
 
 
