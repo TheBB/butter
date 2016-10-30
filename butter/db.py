@@ -14,7 +14,7 @@ import yaml
 
 from .gui import run_gui
 from .pickers import FilterPicker, RandomPicker, UnionPicker
-from .programs import SingleImage
+from .programs import Images
 
 
 def rsync_dir(source, destination, say=False):
@@ -134,7 +134,7 @@ class DatabaseLoader(AbstractDatabase):
 
     def flag(self, fn, db):
         print('Staged: {}'.format(fn))
-        run_gui(program=SingleImage.factory(fn))
+        run_gui(program=Images.factory(fn))
         extension = splitext(fn)[-1].lower()
         if extension == '.jpeg':
             extension = '.jpg'
@@ -149,7 +149,7 @@ class DatabaseLoader(AbstractDatabase):
                     pic = None
                 break
             if s == 'view':
-                run_gui(program=SingleImage.factory(fn))
+                run_gui(program=Images.factory(fn))
             elif s in {'skip', 'done'}:
                 if s == 'skip':
                     pic = None

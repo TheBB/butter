@@ -135,17 +135,43 @@ class Slideshow(FromPicker):
             self.timer.setInterval(self.delay)
 
 
-class SingleImage(Program):
+class Images(Program):
 
-    def __init__(self, m, img):
-        super(SingleImage, self).__init__(m)
+    _index = 0
+
+    def __init__(self, m, *images):
+        super(Images, self).__init__(m)
+        self.images = images
+        self.index = 0
+        self.show_image(m)
+
+    @property
+    def index(self):
+        return self._index
+
+    @index.setter
+    def index(self, value):
+        self._index = value % len(self.images)
+
+    def show_image(self, m):
+        img = self.images[self.index]
         m.show_image(img)
 
         try:
             fn = img.filename
         except AttributeError:
             fn = img
-        self.message = basename(fn)
+        self.message = '({}/{}) {}'.format(self.index+1, len(self.images), basename(fn))
+
+    @bind('j', 'n', 'SPC', 'RIGHT', 'DOWN')
+    def next(self, m):
+        self.index += 1
+        self.show_image(m)
+
+    @bind('k', 'p', 'BSP', 'LEFT', 'UP')
+    def prev(self, m):
+        self.index -= 1
+        self.show_image(m)
 
     @bind()
     def quit(self, m):
