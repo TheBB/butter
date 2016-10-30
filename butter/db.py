@@ -286,6 +286,9 @@ class Database(AbstractDatabase):
     def query(self):
         return self.session.query(self.Picture)
 
+    def delete_pics(self):
+        return self.query().filter(self.Picture.delt == True)
+
     def delete_ids(self):
         return {p.id for p in self.query().filter(self.Picture.delt == True)}
 

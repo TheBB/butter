@@ -13,11 +13,13 @@ def main(ctx):
 
 cfg.load_plugins(main)
 
+
 @main.command('list')
 def list_dbs():
     """Show a list of databases."""
     for db in cfg.databases():
         print(db)
+
 
 @main.command()
 @cfg.db_argument()
@@ -25,11 +27,13 @@ def status(db):
     """Show basic information about a database."""
     print(db)
 
+
 @main.command()
 @cfg.db_argument()
 def gui(db):
     """Launch the GUI."""
     run_gui(db=db)
+
 
 @main.command()
 @click.option('--push/--no-push', default=True)
@@ -47,6 +51,14 @@ def sync(db, **kwargs):
 def push_config(db):
     """Push config to remote."""
     db.push_config()
+
+
+@main.command('show-deletes')
+@cfg.db_argument()
+def show_deletes(db):
+    pics = list(db.delete_pics())
+    if pics:
+        run_gui(program=Images.factory(*pics))
 
 
 if __name__ == '__main__':
