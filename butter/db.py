@@ -181,7 +181,7 @@ class DatabaseLoader(AbstractDatabase):
         return database_class(self.name, self.path, *args, **kwargs)
 
 
-class Field(Column):
+class Field:
 
     FieldType = namedtuple('FieldType', ['pytype', 'sqltype', 'default'])
 
@@ -192,7 +192,7 @@ class Field(Column):
 
     def __init__(self, key, type, aliases=[]):
         self.typestr = type
-        super(Field, self).__init__(key, type_=self.sql_type, nullable=False, default=self.default_value)
+        self.key = key
         self.__aliases = {a.lower() for a in aliases}
         self.__aliases.add(key.lower())
 
@@ -210,6 +210,9 @@ class Field(Column):
 
     def matches(self, key):
         return key.lower() in self.__aliases
+
+    def column(self):
+        return Column(self.key, type_=self.sql_type, nullable=False, default=self.default_value)
 
 
 class Database(AbstractDatabase):
@@ -266,7 +269,7 @@ class Database(AbstractDatabase):
         ]
         for c in self.cfg['fields']:
             field = Field(**c)
-            columns.append(field)
+            columns.append(field.column())
             Picture.fields.append(field)
 
         self.engine = create_engine('sqlite:///{}'.format(self.sql_file))
