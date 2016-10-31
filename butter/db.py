@@ -265,12 +265,12 @@ class Database(AbstractDatabase):
                 return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
                                  for field in self.fields)
 
-            def mark_delete(self):
-                self.delt = True
+            def mark_delete(self, value=True):
+                self.delt = value
                 self.db.session.commit()
 
-            def mark_upgrade(self):
-                self.upg = True
+            def mark_upgrade(self, value=True):
+                self.upg = value
                 self.db.session.commit()
 
             def replace_with(self, fn):

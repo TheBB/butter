@@ -108,13 +108,13 @@ class MainWindow(Main, QMainWindow):
             self.paused = not self.paused
             return
 
-        if text in {'d', 'u'}:
+        if text.lower() in {'d', 'u'}:
             attr = {
                 'd': 'mark_delete',
                 'u': 'mark_upgrade'
-            }[text]
+            }[text.lower()]
             try:
-                methodcaller(attr)(self.current_pic)
+                methodcaller(attr, text.lower() == text)(self.current_pic)
             except AttributeError:
                 pass
             return
