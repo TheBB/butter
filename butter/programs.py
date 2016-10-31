@@ -176,3 +176,17 @@ class Images(Program):
     @bind()
     def quit(self, m):
         m.close()
+
+
+class Upgrade(Images):
+
+    def __init__(self, m, target, *images):
+        super(Upgrade, self).__init__(m, *images)
+        self.target = target
+
+    @bind('RET')
+    def pick(self, m):
+        img = self.images[self.index]
+        if isinstance(img, str):
+            self.target.replace_with(img)
+        self.quit(m)

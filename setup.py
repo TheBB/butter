@@ -16,12 +16,14 @@ setup(
     },
     install_requires=[
         'click',
+        'imagehash',
         'inflect',
+        'pillow',
         'pyqt5',
         'pyxdg',
+        'requests',
         'sqlalchemy',
-        'imagehash',
-        'pillow',
+        'selenium',
         'tqdm',
     ],
 )

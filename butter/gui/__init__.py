@@ -1,3 +1,4 @@
+from operator import methodcaller
 import sys
 from string import ascii_lowercase
 
@@ -107,9 +108,13 @@ class MainWindow(Main, QMainWindow):
             self.paused = not self.paused
             return
 
-        if text == 'd':
+        if text in {'d', 'u'}:
+            attr = {
+                'd': 'mark_delete',
+                'u': 'mark_upgrade'
+            }[text]
             try:
-                self.current_pic.mark_delete()
+                methodcaller(attr)(self.current_pic)
             except AttributeError:
                 pass
             return

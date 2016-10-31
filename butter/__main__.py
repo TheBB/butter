@@ -3,11 +3,16 @@ import imagehash
 import inflect
 from itertools import combinations
 import multiprocessing
+from os.path import basename, join, splitext
 from PIL import Image
+import requests
+import shutil
+from tempfile import TemporaryDirectory
 from tqdm import tqdm
 from . import cfg
 from .gui import run_gui
-from .programs import Images
+from .programs import Images, Upgrade as UpgradeProgram
+from .upgrade import Upgrade
 
 
 @click.group(invoke_without_command=True)
@@ -109,6 +114,69 @@ def deduplicate(db, threshold, nprocs, chunksize):
     for cluster in clusters:
         pics = [db.pic_by_id(id) for id in cluster]
         run_gui(program=Images.factory(*pics))
+
+
+def download_url(url, path, base):
+    try:
+        _, ext = splitext(url)
+    except:
+        ext = '.jpg'
+    try:
+        response = requests.get(url, stream=True)
+        target = join(path, base + ext)
+        with open(target, 'wb') as out:
+            shutil.copyfileobj(response.raw, out)
+        return target
+    except:
+        pass
+
+def upgrade_pic(pic, u, number):
+    alternatives = [pic]
+    urls = []
+    cmds = ['view', 'search', 'get', 'choose']
+    p = inflect.engine()
+    print(basename(pic.filename))
+    with TemporaryDirectory() as path:
+        while True:
+            s = input('>>> ').strip()
+            if not s:
+                s, cmds = cmds[0], cmds[1:]
+            if s == 'view':
+                run_gui(program=Images.factory(pic))
+            elif s == 'skip':
+                return
+            elif s == 'search':
+                urls = u.potential_urls(pic.filename, number)
+                print('Found {} {}'.format(len(urls), p.plural('URL', len(urls))))
+                for url in urls:
+                    print(url)
+            elif s == 'get':
+                alternatives = [pic]
+                for i, url in enumerate(urls):
+                    target = download_url(url, path, str(i))
+                    if target:
+                        alternatives.append(target)
+                print('Have {} {}'.format(
+                    len(alternatives), p.plural('alternative', len(alternatives)))
+                )
+            elif s == 'choose':
+                run_gui(program=UpgradeProgram.factory(pic, *alternatives))
+                pic.upg = False
+                pic.db.session.commit()
+                return
+
+@main.command()
+@click.option('--number', '-n', type=int, default=5)
+@cfg.db_argument()
+def upgrade(db, number):
+    pics = list(db.upgrade_pics())
+    p = inflect.engine()
+    if not pics:
+        return
+    with Upgrade() as u:
+        while pics:
+            pic, pics = pics[0], pics[1:]
+            upgrade_pic(pic, u, number)
 
 
 if __name__ == '__main__':

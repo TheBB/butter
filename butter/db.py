@@ -89,6 +89,8 @@ class DatabaseLoader(AbstractDatabase):
             n = len(delete_ids)
             print('{} {} scheduled for deletion'.format(n, p.plural('image', n)))
 
+        upgrade_ids = db.upgrade_ids()
+
         existing_hd = {join(db.img_root, fn) for fn in listdir(db.img_root)}
         existing_db = {pic.filename for pic in db.query()}
 
@@ -118,6 +120,11 @@ class DatabaseLoader(AbstractDatabase):
         if delete_ids:
             for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
                 db.delete(pic)
+            db.session.commit()
+
+        if upgrade_ids:
+            for pic in db.query().filter(db.Picture.id.in_(upgrade_ids)):
+                pic.mark_upgrade()
             db.session.commit()
 
         if stage:
@@ -262,6 +269,17 @@ class Database(AbstractDatabase):
                 self.delt = True
                 self.db.session.commit()
 
+            def mark_upgrade(self):
+                self.upg = True
+                self.db.session.commit()
+
+            def replace_with(self, fn):
+                _, ext = splitext(fn)
+                run(['rm', self.filename])
+                self.extension = ext[1:]
+                run(['mv', fn, self.filename], stdout=PIPE, check=True)
+                self.db.session.commit()
+
         columns = [
             Column('id', Integer, primary_key=True),
             Column('extension', String, nullable=False),
@@ -298,6 +316,12 @@ class Database(AbstractDatabase):
 
     def delete_ids(self):
         return {p.id for p in self.delete_pics()}
+
+    def upgrade_pics(self):
+        return self.query().filter(self.Picture.upg == True)
+
+    def upgrade_ids(self):
+        return {p.id for p in self.upgrade_pics()}
 
     def delete(self, pic):
         if exists(pic.filename):
