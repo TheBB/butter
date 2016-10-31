@@ -73,6 +73,14 @@ def show_deletes(db):
         run_gui(program=Images.factory(*pics))
 
 
+@main.command('show-upgrades')
+@cfg.db_argument()
+def show_upgrades(db):
+    pics = list(db.upgrade_pics())
+    if pics:
+        run_gui(program=Images.factory(*pics))
+
+
 def image_hash(pic_id, pic_filename):
     return (pic_id, imagehash.phash(Image.open(pic_filename)))
 
