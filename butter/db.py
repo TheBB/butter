@@ -50,6 +50,13 @@ class AbstractDatabase:
         self.cfg = cfg
 
     @property
+    def plugins(self):
+        try:
+            return self.cfg['plugins']
+        except KeyError:
+            return []
+
+    @property
     def remote(self):
         try:
             return self.cfg['sync']['remote']

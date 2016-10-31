@@ -46,26 +46,30 @@ class MasterConfig:
 
         self.plugin_path = join(self.config_path, 'plugins')
         ensure_dir(self.plugin_path)
+        sys.path.append(self.plugin_path)
+        self.loaded_plugins = set()
+        self.load_plugins = True
 
         self.db_path = join(self.config_path, 'databases')
         ensure_dir(self.db_path)
 
-    def load_plugins(self, main=None):
-        sys.path.append(self.plugin_path)
-        for name in listdir(self.plugin_path):
-            path = join(self.plugin_path, name)
-            if isdir(path):
-                try:
-                    spec = importlib.util.spec_from_file_location(name, join(path, '__init__.py'))
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-                    if hasattr(module, 'commands') and main:
-                        for cmd in module.commands():
-                            main.add_command(cmd)
-                    if hasattr(module, 'enable'):
-                        module.enable()
-                except Exception as e:
-                    print("Failed to load plugin '{}': {}".format(name, e), file=sys.stderr)
+    def load_plugin(self, name, main=None):
+        if name in self.loaded_plugins or not self.load_plugins:
+            return
+        path = join(self.plugin_path, name)
+        if isdir(path):
+            try:
+                spec = importlib.util.spec_from_file_location(name, join(path, '__init__.py'))
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                if hasattr(module, 'enable'):
+                    module.enable()
+                self.loaded_plugins.add(name)
+            except Exception as e:
+                print("Failed to load plugin '{}': {}".format(name, e), file=sys.stderr)
+
+    def plugin_loaded(self, name):
+        return name in self.loaded_plugins
 
     def databases(self):
         return sorted(listdir(self.db_path))
@@ -78,6 +82,9 @@ class MasterConfig:
 
     def database_loader(self, name):
         assert name in self.databases()
+        loader = loader_class(name, join(self.db_path, name))
+        for plugin in loader.plugins:
+            self.load_plugin(plugin)
         return loader_class(name, join(self.db_path, name))
 
     def database(self, name, *args, **kwargs):

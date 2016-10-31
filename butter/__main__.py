@@ -16,14 +16,17 @@ from .upgrade import Upgrade
 
 
 @click.group(invoke_without_command=True)
+@click.option('--no-plugins', 'allow_plugins', default=True, flag_value=False)
+@click.option('--plugin', '-p', 'plugins', multiple=True, type=str)
 @click.pass_context
-def main(ctx):
+def main(ctx, plugins, allow_plugins):
     """Extensible image database tool."""
     ctx.obj = cfg
+    cfg.load_plugins = allow_plugins
+    for plugin in plugins:
+        cfg.load_plugin(plugin)
     if ctx.invoked_subcommand is None:
         ctx.invoke(gui)
-
-cfg.load_plugins(main)
 
 
 @main.command('list')
