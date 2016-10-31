@@ -266,6 +266,7 @@ class Database(AbstractDatabase):
             Column('id', Integer, primary_key=True),
             Column('extension', String, nullable=False),
             Column('delt', Boolean, nullable=False, default=False),
+            Column('upg', Boolean, nullable=False, default=False),
         ]
         for c in self.cfg['fields']:
             field = Field(**c)
