@@ -169,6 +169,7 @@ def upgrade_pic(pic, u, number):
 @click.option('--number', '-n', type=int, default=5)
 @cfg.db_argument()
 def upgrade(db, number):
+    sync(pull=True, push=False, stage=False)
     pics = list(db.upgrade_pics())
     p = inflect.engine()
     if not pics:
@@ -177,6 +178,7 @@ def upgrade(db, number):
         while pics:
             pic, pics = pics[0], pics[1:]
             upgrade_pic(pic, u, number)
+    sync(push=True, pull=False, stage=False)
 
 
 if __name__ == '__main__':
