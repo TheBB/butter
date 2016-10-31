@@ -8,6 +8,7 @@ from tqdm import tqdm
 from . import cfg
 from .gui import run_gui
 from .programs import Images
+from .upgrade import Upgrade
 
 
 @click.group(invoke_without_command=True)
@@ -109,6 +110,12 @@ def deduplicate(db, threshold, nprocs, chunksize):
     for cluster in clusters:
         pics = [db.pic_by_id(id) for id in cluster]
         run_gui(program=Images.factory(*pics))
+
+
+@main.command()
+def test():
+    with Upgrade() as u:
+        urls = u.get_upgrade('/home/efonn/.config/butter/databases/porn/contents/00000002.jpg')
 
 
 if __name__ == '__main__':
