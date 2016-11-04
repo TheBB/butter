@@ -26,12 +26,14 @@ class Upgrade:
         d.find_element_by_link_text('Upload an image').click()
         d.find_element_by_css_selector('input#qbfile').send_keys(fn)
 
-        while True:
+        for _ in range(10):
             try:
                 d.find_element_by_link_text('All sizes').click()
                 break
             except NoSuchElementException:
                 sleep(1)
+        else:
+            return []
 
         imgs = []
         while True:
