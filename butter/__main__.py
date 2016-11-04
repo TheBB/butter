@@ -130,10 +130,11 @@ def deduplicate(db, threshold, nprocs, chunksize):
 def download_url(url, path, base):
     try:
         _, ext = splitext(url)
+        ext = ext.split('?')[0]
     except:
         ext = '.jpg'
     try:
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, timeout=10)
         target = join(path, base + ext)
         with open(target, 'wb') as out:
             shutil.copyfileobj(response.raw, out)
