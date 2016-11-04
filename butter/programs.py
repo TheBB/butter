@@ -141,7 +141,7 @@ class Images(Program):
 
     def __init__(self, m, *images):
         super(Images, self).__init__(m)
-        self.images = images
+        self.images = list(images)
         self.index = 0
         self.show_image(m)
 
@@ -186,7 +186,15 @@ class Upgrade(Images):
 
     @bind('RET')
     def pick(self, m):
+        print('pick')
         img = self.images[self.index]
         if isinstance(img, str):
+            print('yep')
             self.target.replace_with(img)
         self.quit(m)
+
+    @bind('i')
+    def drop(self, m):
+        del self.images[self.index]
+        self.index = self.index
+        self.show_image(m)
