@@ -1,4 +1,5 @@
 from collections import namedtuple, OrderedDict
+from contextlib import contextmanager
 from os import listdir
 from os.path import basename, exists, join, splitext
 from subprocess import run, PIPE
@@ -88,62 +89,66 @@ class DatabaseLoader(AbstractDatabase):
             remote_sql = join(self.remote, 'db.sqlite3')
             remote_config = join(self.remote, 'config.yaml')
 
-        db = self.database()
-        p = inflect.engine()
+        with self.database() as db:
+            p = inflect.engine()
 
-        delete_ids = db.delete_ids()
-        if delete_ids or verbose:
-            n = len(delete_ids)
-            print('{} {} scheduled for deletion'.format(n, p.plural('image', n)))
+            delete_ids = db.delete_ids()
+            if delete_ids or verbose:
+                n = len(delete_ids)
+                print('{} {} scheduled for deletion'.format(n, p.plural('image', n)))
 
-        upgrade_ids = db.upgrade_ids()
+            upgrade_ids = db.upgrade_ids()
 
-        existing_hd = {join(db.img_root, fn) for fn in listdir(db.img_root)}
-        existing_db = {pic.filename for pic in db.query()}
+            existing_hd = {join(db.img_root, fn) for fn in listdir(db.img_root)}
+            existing_db = {pic.filename for pic in db.query()}
 
-        deleted_on_hd = existing_db - existing_hd
-        if deleted_on_hd or verbose:
-            n = len(deleted_on_hd)
-            print('{} {} deleted from disk, deleting also from database'.format(n, p.plural('image', n)))
-            for c in deleted_on_hd:
-                delete_ids.add(int(splitext(basename(c))[0][:-1]))
+            deleted_on_hd = existing_db - existing_hd
+            if deleted_on_hd or verbose:
+                n = len(deleted_on_hd)
+                print('{} {} deleted from disk, deleting also from database'.format(n, p.plural('image', n)))
+                print(deleted_on_hd)
+                for c in deleted_on_hd:
+                    delete_ids.add(int(splitext(basename(c))[0]))
 
-        deleted_in_db = existing_hd - existing_db
-        if deleted_in_db or verbose:
-            n = len(deleted_in_db)
-            print('{} {} deleted from database, re-staging'.format(n, p.plural('image', n)))
-            for fn in deleted_in_db:
-                run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
+            deleted_in_db = existing_hd - existing_db
+            if deleted_in_db or verbose:
+                n = len(deleted_in_db)
+                print('{} {} deleted from database, re-staging'.format(n, p.plural('image', n)))
+                for fn in deleted_in_db:
+                    run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
 
-        if pull:
-            print('Fetching data from remote...')
-            rsync_dir(remote_contents, local_contents, say=verbose)
-            rsync_file(remote_sql, self.sql_file)
-            if self.cfg['sync']['sync_config']:
-                rsync_file(remote_config, self.config_file)
+            if pull:
+                print('Fetching data from remote...')
+                rsync_dir(remote_contents, local_contents, say=verbose)
+                rsync_file(remote_sql, self.sql_file)
+                if self.cfg['sync']['sync_config']:
+                    rsync_file(remote_config, self.config_file)
 
-        db = self.database()
+        with self.database() as db:
+            if delete_ids:
+                print(delete_ids)
+                for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
+                    print('Deleting', pic.id)
+                    db.delete(pic)
+                db.session.commit()
 
-        if delete_ids:
-            for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
-                db.delete(pic)
-            db.session.commit()
+            if upgrade_ids:
+                for pic in db.query().filter(db.Picture.id.in_(upgrade_ids)):
+                    pic.mark_upgrade()
+                db.session.commit()
 
-        if upgrade_ids:
-            for pic in db.query().filter(db.Picture.id.in_(upgrade_ids)):
-                pic.mark_upgrade()
-            db.session.commit()
+            if stage:
+                for fn in listdir(self.staging_root):
+                    self.flag(join(self.staging_root, fn), db)
 
-        if stage:
-            for fn in listdir(self.staging_root):
-                self.flag(join(self.staging_root, fn), db)
+            db.session.flush()
 
-        if push:
-            print('Sending data to remote...')
-            rsync_dir(local_contents, remote_contents, say=verbose)
-            rsync_file(self.sql_file, remote_sql)
-            if self.cfg['sync']['sync_config']:
-                rsync_file(self.config_file, remote_config)
+            if push:
+                print('Sending data to remote...')
+                rsync_dir(local_contents, remote_contents, say=verbose)
+                rsync_file(self.sql_file, remote_sql)
+                if self.cfg['sync']['sync_config']:
+                    rsync_file(self.config_file, remote_config)
 
 
     def flag(self, fn, db):
@@ -186,13 +191,19 @@ class DatabaseLoader(AbstractDatabase):
                     print(e)
 
         if pic:
-            db.session.add(pic)
-            db.session.commit()
-            run(['mv', fn, pic.filename], stdout=PIPE, check=True)
-            print('Committed as {}'.format(basename(pic.filename)))
+            self.add_pic(fn, pic, db)
 
+    def add_pic(self, fn, pic, db):
+        db.session.add(pic)
+        db.session.commit()
+        run(['mv', fn, pic.filename], stdout=PIPE, check=True)
+        print('Committed as {}'.format(basename(pic.filename)))
+
+    @contextmanager
     def database(self, *args, **kwargs):
-        return database_class(self.name, self.path, *args, **kwargs)
+        db = database_class(self.name, self.path, *args, **kwargs)
+        yield db
+        db.close()
 
 
 class Field:
@@ -238,6 +249,9 @@ class Database(AbstractDatabase):
 
     def __repr__(self):
         return '<Database {}>'.format(self.name)
+
+    def close(self):
+        pass
 
     def load_config(self):
         with open(self.config_file, 'r') as f:

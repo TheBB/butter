@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import importlib.util
 from os.path import exists, isdir, join
 from os import listdir, makedirs
@@ -6,7 +7,7 @@ import sys
 import click
 import xdg.BaseDirectory
 
-from .db import database_class, loader_class
+import butter.db as db
 
 
 def ensure_dir(path):
@@ -17,26 +18,19 @@ def ensure_dir(path):
 class DatabaseParamType(click.ParamType):
     name = 'database'
 
-    def __init__(self, loader):
+    def __init__(self):
         super(DatabaseParamType, self).__init__()
-        self.loader = loader
 
     def convert(self, value, param, ctx):
-        exp_type = loader_class if self.loader else database_class
-        if isinstance(value, exp_type):
+        if isinstance(value, db.loader_class):
             return value
         try:
             cfg = ctx.find_object(MasterConfig)
-            loader = cfg.database_loader(value)
-            if self.loader:
-                return loader
-            else:
-                return loader.database()
+            return cfg.database_loader(value)
         except Exception as e:
             self.fail("Failed to open database '{}': {}".format(value, e))
 
-DATABASE_LOADER = DatabaseParamType(True)
-DATABASE = DatabaseParamType(False)
+DATABASE_LOADER = DatabaseParamType()
 
 
 class MasterConfig:
@@ -82,18 +76,21 @@ class MasterConfig:
 
     def database_loader(self, name):
         assert name in self.databases()
-        loader = loader_class(name, join(self.db_path, name))
+        loader = db.loader_class(name, join(self.db_path, name))
         for plugin in loader.plugins:
             self.load_plugin(plugin)
-        return loader_class(name, join(self.db_path, name))
+        return db.loader_class(name, join(self.db_path, name))
 
+    @contextmanager
     def database(self, name, *args, **kwargs):
-        return self.database_loader(name).database(*args, **kwargs)
+        db = self.database_loader(name).database(*args, **kwargs)
+        yield db
+        db.close()
 
-    def db_argument(self, argname='db', loader=False):
-        kind = DATABASE_LOADER if loader else DATABASE
+    def db_argument(self, argname='db'):
         def decorator(fn):
-            return click.argument(argname, type=kind, default=self.default_database_name())(fn)
+            return click.argument(argname, type=DATABASE_LOADER,
+                                  default=self.default_database_name())(fn)
         return decorator
 
 cfg = MasterConfig()

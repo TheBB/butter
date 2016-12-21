@@ -40,14 +40,16 @@ def list_dbs():
 @cfg.db_argument()
 def status(db):
     """Show basic information about a database."""
-    print(db)
+    with db.database() as db:
+        print(db)
 
 
 @main.command()
 @cfg.db_argument()
 def gui(db):
     """Launch the GUI."""
-    run_gui(db=db)
+    with db.database() as db:
+        run_gui(db=db)
 
 
 @main.command()
@@ -55,14 +57,14 @@ def gui(db):
 @click.option('--pull/--no-pull', default=True)
 @click.option('--stage/--no-stage', default=True)
 @click.option('-v', '--verbose', default=False, is_flag=True)
-@cfg.db_argument(loader=True)
+@cfg.db_argument()
 def sync(db, **kwargs):
     """Synchronize a database."""
     db.sync(**kwargs)
 
 
 @main.command('push-config')
-@cfg.db_argument(loader=True)
+@cfg.db_argument()
 def push_config(db):
     """Push config to remote."""
     db.push_config()
@@ -71,17 +73,19 @@ def push_config(db):
 @main.command('show-deletes')
 @cfg.db_argument()
 def show_deletes(db):
-    pics = list(db.delete_pics())
-    if pics:
-        run_gui(program=Images.factory(*pics))
+    with db.database() as db:
+        pics = list(db.delete_pics())
+        if pics:
+            run_gui(program=Images.factory(*pics))
 
 
 @main.command('show-upgrades')
 @cfg.db_argument()
 def show_upgrades(db):
-    pics = list(db.upgrade_pics())
-    if pics:
-        run_gui(program=Images.factory(*pics))
+    with db.database() as db:
+        pics = list(db.upgrade_pics())
+        if pics:
+            run_gui(program=Images.factory(*pics))
 
 
 def image_hash(pic_id, pic_filename):
@@ -99,32 +103,33 @@ def image_diff(a, b):
 @cfg.db_argument()
 def deduplicate(db, threshold, nprocs, chunksize):
     """Find duplicate images."""
-    pics = {pic.id: pic.filename for pic in db.query()}
-    pool = multiprocessing.Pool(nprocs)
-    hashes = pool.starmap(image_hash, tqdm(pics.items(), desc='Computing hashes'),
-                          chunksize=chunksize)
-    pool.close()
+    with db.database() as db:
+        pics = {pic.id: pic.filename for pic in db.query()}
+        pool = multiprocessing.Pool(nprocs)
+        hashes = pool.starmap(image_hash, tqdm(pics.items(), desc='Computing hashes'),
+                              chunksize=chunksize)
+        pool.close()
 
-    # Could use multiprocessing here too but it seems communication-dominated
-    ndiffs = len(hashes) * (len(hashes) - 1) // 2
-    diffs = [(pic_a, pic_b, abs(hash_a - hash_b))
-             for (pic_a, hash_a), (pic_b, hash_b)
-             in tqdm(combinations(hashes, 2), total=ndiffs, desc='Computing diffs')
-             if abs(hash_a - hash_b) <= threshold]
+        # Could use multiprocessing here too but it seems communication-dominated
+        ndiffs = len(hashes) * (len(hashes) - 1) // 2
+        diffs = [(pic_a, pic_b, abs(hash_a - hash_b))
+                 for (pic_a, hash_a), (pic_b, hash_b)
+                 in tqdm(combinations(hashes, 2), total=ndiffs, desc='Computing diffs')
+                 if abs(hash_a - hash_b) <= threshold]
 
-    clusters = {}
-    for id_a, id_b, diff in diffs:
-        cluster = clusters.get(id_a, set()) | clusters.get(id_b, set()) | {id_a, id_b}
-        for id in cluster:
-            clusters[id] = cluster
-    clusters = {frozenset(cluster) for cluster in clusters.values()}
+        clusters = {}
+        for id_a, id_b, diff in diffs:
+            cluster = clusters.get(id_a, set()) | clusters.get(id_b, set()) | {id_a, id_b}
+            for id in cluster:
+                clusters[id] = cluster
+        clusters = {frozenset(cluster) for cluster in clusters.values()}
 
-    p = inflect.engine()
-    print('Found {} {}'.format(len(clusters), p.plural('cluster', len(clusters))))
-    input('Press any key to continue...')
-    for cluster in clusters:
-        pics = [db.pic_by_id(id) for id in cluster]
-        run_gui(program=Images.factory(*pics))
+        p = inflect.engine()
+        print('Found {} {}'.format(len(clusters), p.plural('cluster', len(clusters))))
+        input('Press any key to continue...')
+        for cluster in clusters:
+            pics = [db.pic_by_id(id) for id in cluster]
+            run_gui(program=Images.factory(*pics))
 
 
 def download_url(url, path, base):
@@ -181,14 +186,15 @@ def upgrade_pic(pic, u, number):
 @click.option('--number', '-n', type=int, default=5)
 @cfg.db_argument()
 def upgrade(db, number):
-    pics = list(db.upgrade_pics())
-    p = inflect.engine()
-    if not pics:
-        return
-    with Upgrade() as u:
-        while pics:
-            pic, pics = pics[0], pics[1:]
-            upgrade_pic(pic, u, number)
+    with db.database() as db:
+        pics = list(db.upgrade_pics())
+        p = inflect.engine()
+        if not pics:
+            return
+        with Upgrade() as u:
+            while pics:
+                pic, pics = pics[0], pics[1:]
+                upgrade_pic(pic, u, number)
 
 
 if __name__ == '__main__':
