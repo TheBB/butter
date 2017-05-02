@@ -1,3 +1,4 @@
+from itertools import repeat
 from random import uniform
 
 from sqlalchemy.sql import func
@@ -14,6 +15,11 @@ class FilterPicker:
 
     def get_all(self):
         return self.db.query().filter(*self.filters)
+
+    def get_dist(self):
+        pics = list(self.get_all())
+        prob = 1 / len(pics)
+        yield from zip(pics, repeat(prob))
 
 
 class RandomPicker(FilterPicker):
@@ -42,7 +48,13 @@ class UnionPicker:
 
         return p.get()
 
-    def get_all(self):
+    def get_all(self, probs=False):
         for p, f in self.pickers:
             if f > 0.0:
-                yield from p.get_all()
+                yield from p.get_all(probs)
+
+    def get_dist(self):
+        for p, f in self.pickers:
+            if f > 0.0:
+                for pic, prob in p.get_dist():
+                    yield (pic, prob * f)

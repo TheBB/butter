@@ -83,9 +83,9 @@ class MasterConfig:
 
     @contextmanager
     def database(self, name, *args, **kwargs):
-        db = self.database_loader(name).database(*args, **kwargs)
-        yield db
-        db.close()
+        with self.database_loader(name).database(*args, **kwargs) as db:
+            yield db
+            db.close()
 
     def db_argument(self, argname='db'):
         def decorator(fn):
