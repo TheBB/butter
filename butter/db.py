@@ -92,12 +92,8 @@ class DatabaseLoader(AbstractDatabase):
         with self.database() as db:
             p = inflect.engine()
 
-            delete_ids = db.delete_ids()
-            if delete_ids or verbose:
-                n = len(delete_ids)
-                print('{} {} scheduled for deletion'.format(n, p.plural('image', n)))
-
-            upgrade_ids = db.upgrade_ids()
+            tweak_ids = db.tweak_ids()
+            delete_ids = set()
 
             existing_hd = {join(db.img_root, fn) for fn in listdir(db.img_root)}
             existing_db = {pic.filename for pic in db.query()}
@@ -106,7 +102,6 @@ class DatabaseLoader(AbstractDatabase):
             if deleted_on_hd or verbose:
                 n = len(deleted_on_hd)
                 print('{} {} deleted from disk, deleting also from database'.format(n, p.plural('image', n)))
-                print(deleted_on_hd)
                 for c in deleted_on_hd:
                     delete_ids.add(int(splitext(basename(c))[0]))
 
@@ -132,9 +127,9 @@ class DatabaseLoader(AbstractDatabase):
                     db.delete(pic)
                 db.session.commit()
 
-            if upgrade_ids:
-                for pic in db.query().filter(db.Picture.id.in_(upgrade_ids)):
-                    pic.mark_upgrade()
+            if tweak_ids:
+                for pic in db.query().filter(db.Picture.id.in_(tweak_ids)):
+                    pic.mark_tweak()
                 db.session.commit()
 
             if stage:
@@ -286,12 +281,8 @@ class Database(AbstractDatabase):
                 return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
                                  for field in self.fields)
 
-            def mark_delete(self, value=True):
-                self.delt = value
-                self.db.session.commit()
-
-            def mark_upgrade(self, value=True):
-                self.upg = value
+            def mark_tweak(self, value=True):
+                self.tweak = value
                 self.db.session.commit()
 
             def replace_with(self, fn):
@@ -305,8 +296,7 @@ class Database(AbstractDatabase):
         columns = [
             Column('id', Integer, primary_key=True),
             Column('extension', String, nullable=False),
-            Column('delt', Boolean, nullable=False, default=False),
-            Column('upg', Boolean, nullable=False, default=False),
+            Column('tweak', Boolean, nullable=False, default=False),
         ]
         for c in self.cfg['fields']:
             field = Field(**c)
@@ -333,22 +323,17 @@ class Database(AbstractDatabase):
     def pic_by_id(self, id):
         return self.query().get(id)
 
-    def delete_pics(self):
-        return self.query().filter(self.Picture.delt == True)
+    def tweak_pics(self):
+        return self.query().filter(self.Picture.tweak == True)
 
-    def delete_ids(self):
-        return {p.id for p in self.delete_pics()}
-
-    def upgrade_pics(self):
-        return self.query().filter(self.Picture.upg == True)
-
-    def upgrade_ids(self):
-        return {p.id for p in self.upgrade_pics()}
+    def tweak_ids(self):
+        return {p.id for p in self.tweak_pics()}
 
     def delete(self, pic):
         if exists(pic.filename):
             run(['rm', pic.filename], check=True)
         self.session.delete(pic)
+        self.session.commit()
 
     def picker(self, filters=[]):
         if not filters:

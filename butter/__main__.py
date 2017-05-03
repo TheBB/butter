@@ -70,20 +70,11 @@ def push_config(db):
     db.push_config()
 
 
-@main.command('show-deletes')
+@main.command('show-tweaks')
 @cfg.db_argument()
-def show_deletes(db):
+def show_tweaks(db):
     with db.database() as db:
-        pics = list(db.delete_pics())
-        if pics:
-            run_gui(program=Images.factory(*pics))
-
-
-@main.command('show-upgrades')
-@cfg.db_argument()
-def show_upgrades(db):
-    with db.database() as db:
-        pics = list(db.upgrade_pics())
+        pics = list(db.tweak_pics())
         if pics:
             run_gui(program=Images.factory(*pics))
 
@@ -147,54 +138,59 @@ def download_url(url, path, base):
     except:
         pass
 
-def upgrade_pic(pic, u, number):
+def upgrade_pic(pic, u, number, prompt='>>> '):
     alternatives = [pic]
     urls = []
     cmds = ['view', 'search', 'get', 'choose']
     p = inflect.engine()
-    print(basename(pic.filename))
     with TemporaryDirectory() as path:
-        while True:
-            s = input('>>> ').strip()
-            if not s:
-                s, cmds = cmds[0], cmds[1:]
-            if s == 'view':
-                run_gui(program=Images.factory(pic))
-            elif s == 'skip':
-                return
-            elif s == 'search':
-                urls = u.potential_urls(pic.filename, number)
-                print('Found {} {}'.format(len(urls), p.plural('URL', len(urls))))
-                for url in urls:
-                    print(url)
-            elif s == 'get':
-                alternatives = [pic]
-                for i, url in enumerate(urls):
-                    target = download_url(url, path, str(i))
-                    if target:
-                        alternatives.append(target)
-                print('Have {} {}'.format(
-                    len(alternatives), p.plural('alternative', len(alternatives)))
-                )
-            elif s == 'choose':
-                run_gui(program=UpgradeProgram.factory(pic, *alternatives))
-                pic.upg = False
-                pic.db.session.commit()
-                return
+        urls = u.potential_urls(pic.filename, number)
+        print('Found {} {}'.format(len(urls), p.plural('URL', len(urls))))
+        alternatives = [pic]
+        for i, url in enumerate(urls):
+            target = download_url(url, path, str(i))
+            if target:
+                alternatives.append(target)
+        print('Have {} {}'.format(
+            len(alternatives), p.plural('alternative', len(alternatives)))
+        )
+        run_gui(program=UpgradeProgram.factory(pic, *alternatives))
+        pic.db.session.commit()
 
 @main.command()
-@click.option('--number', '-n', type=int, default=5)
+@click.option('--samples', '-s', type=int, default=5)
 @cfg.db_argument()
-def upgrade(db, number):
-    with db.database() as db:
-        pics = list(db.upgrade_pics())
-        p = inflect.engine()
-        if not pics:
-            return
-        with Upgrade() as u:
-            while pics:
-                pic, pics = pics[0], pics[1:]
-                upgrade_pic(pic, u, number)
+def tweak(db, samples):
+    with db.database() as db, Upgrade() as u, TemporaryDirectory() as path:
+        pics = list(db.tweak_pics())
+        for i, pic in enumerate(pics):
+            run_gui(program=Images.factory(pic))
+            while True:
+                prompt = '({}/{}) >>> '.format(i+1, len(pics))
+                s = input(prompt).strip()
+                if s in {'', 'skip'}:
+                    break
+                elif s == 'done':
+                    return
+                elif s == 'view':
+                    run_gui(program=Images.factory(pic))
+                elif s in {'a', 'app', 'approve'}:
+                    pic.mark_tweak(False)
+                elif s in {'u', 'up', 'upgrade'}:
+                    upgrade_pic(pic, u, samples, prompt=prompt)
+                    pic.mark_tweak(False)
+                    break
+                elif s in {'d', 'del', 'delete'}:
+                    db.delete(pic)
+                    break
+
+
+        # p = inflect.engine()
+        # if not pics:
+        #     return
+        # while pics:
+        #     pic, pics = pics[0], pics[1:]
+        #     upgrade_pic(pic, u, number)
 
 
 if __name__ == '__main__':

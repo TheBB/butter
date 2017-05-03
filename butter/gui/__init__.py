@@ -108,10 +108,9 @@ class MainWindow(Main, QMainWindow):
             self.paused = not self.paused
             return
 
-        if text.lower() in {'d', 'u'}:
+        if text.lower() in {'t'}:
             attr = {
-                'd': 'mark_delete',
-                'u': 'mark_upgrade'
+                't': 'mark_tweak'
             }[text.lower()]
             try:
                 methodcaller(attr, text.lower() == text)(self.current_pic)
