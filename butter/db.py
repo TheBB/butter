@@ -289,7 +289,6 @@ class Database(AbstractDatabase):
                 _, ext = splitext(fn)
                 run(['rm', self.filename], stdout=PIPE, check=True)
                 self.extension = ext[1:]
-                print('Running move')
                 run(['mv', fn, self.filename], stdout=PIPE, check=True)
                 self.db.session.commit()
 

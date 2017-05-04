@@ -186,15 +186,34 @@ class Upgrade(Images):
 
     @bind('RET')
     def pick(self, m):
-        print('pick')
         img = self.images[self.index]
         if isinstance(img, str):
-            print('yep')
             self.target.replace_with(img)
         self.quit(m)
 
-    @bind('i')
+    @bind('d')
     def drop(self, m):
+        del self.images[self.index]
+        self.index = self.index
+        self.show_image(m)
+
+
+class PickOne(Images):
+
+    def __init__(self, m, *images):
+        super(PickOne, self).__init__(m, *images)
+
+    @bind('RET')
+    def pick(self, m):
+        for i, pic in enumerate(self.images):
+            if i != self.index:
+                pic.db.delete(pic)
+        self.quit(m)
+
+    @bind('d')
+    def drop(self, m):
+        pic = self.images[self.index]
+        pic.db.delete(pic)
         del self.images[self.index]
         self.index = self.index
         self.show_image(m)

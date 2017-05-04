@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from tqdm import tqdm
 from . import cfg
 from .gui import run_gui
-from .programs import Images, Upgrade as UpgradeProgram
+from .programs import Images, Upgrade as UpgradeProgram, PickOne
 from .upgrade import Upgrade
 
 
@@ -120,7 +120,7 @@ def deduplicate(db, threshold, nprocs, chunksize):
         input('Press any key to continue...')
         for cluster in clusters:
             pics = [db.pic_by_id(id) for id in cluster]
-            run_gui(program=Images.factory(*pics))
+            run_gui(program=PickOne.factory(*pics))
 
 
 def download_url(url, path, base):
@@ -176,6 +176,7 @@ def tweak(db, samples):
                     run_gui(program=Images.factory(pic))
                 elif s in {'a', 'app', 'approve'}:
                     pic.mark_tweak(False)
+                    break
                 elif s in {'u', 'up', 'upgrade'}:
                     upgrade_pic(pic, u, samples, prompt=prompt)
                     pic.mark_tweak(False)
@@ -183,14 +184,6 @@ def tweak(db, samples):
                 elif s in {'d', 'del', 'delete'}:
                     db.delete(pic)
                     break
-
-
-        # p = inflect.engine()
-        # if not pics:
-        #     return
-        # while pics:
-        #     pic, pics = pics[0], pics[1:]
-        #     upgrade_pic(pic, u, number)
 
 
 if __name__ == '__main__':
