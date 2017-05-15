@@ -40,7 +40,7 @@ def list_dbs():
 @cfg.db_argument()
 def status(db):
     """Show basic information about a database."""
-    with db.database() as db:
+    with db.database(regular=False) as db:
         print(db)
 
 
@@ -48,7 +48,7 @@ def status(db):
 @cfg.db_argument()
 def gui(db):
     """Launch the GUI."""
-    with db.database() as db:
+    with db.database(regular=True) as db:
         run_gui(db=db)
 
 
@@ -73,7 +73,7 @@ def push_config(db):
 @main.command('show-tweaks')
 @cfg.db_argument()
 def show_tweaks(db):
-    with db.database() as db:
+    with db.database(regular=False) as db:
         pics = list(db.tweak_pics())
         if pics:
             run_gui(program=Images.factory(*pics))
@@ -94,7 +94,7 @@ def image_diff(a, b):
 @cfg.db_argument()
 def deduplicate(db, threshold, nprocs, chunksize):
     """Find duplicate images."""
-    with db.database() as db:
+    with db.database(regular=False) as db:
         pics = {pic.id: pic.filename for pic in db.query()}
         pool = multiprocessing.Pool(nprocs)
         hashes = pool.starmap(image_hash, tqdm(pics.items(), desc='Computing hashes'),
@@ -161,7 +161,7 @@ def upgrade_pic(pic, u, number, prompt='>>> '):
 @click.option('--samples', '-s', type=int, default=5)
 @cfg.db_argument()
 def tweak(db, samples):
-    with db.database() as db, Upgrade() as u, TemporaryDirectory() as path:
+    with db.database(regular=False) as db, Upgrade() as u, TemporaryDirectory() as path:
         pics = list(db.tweak_pics())
         for i, pic in enumerate(pics):
             run_gui(program=Images.factory(pic))

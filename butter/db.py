@@ -89,7 +89,7 @@ class DatabaseLoader(AbstractDatabase):
             remote_sql = join(self.remote, 'db.sqlite3')
             remote_config = join(self.remote, 'config.yaml')
 
-        with self.database() as db:
+        with self.database(regular=False) as db:
             p = inflect.engine()
 
             tweak_ids = db.tweak_ids()
@@ -119,7 +119,7 @@ class DatabaseLoader(AbstractDatabase):
                 if self.cfg['sync']['sync_config']:
                     rsync_file(remote_config, self.config_file)
 
-        with self.database() as db:
+        with self.database(regular=False) as db:
             if delete_ids:
                 print(delete_ids)
                 for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
@@ -237,7 +237,7 @@ class Field:
 
 class Database(AbstractDatabase):
 
-    def __init__(self, name, path):
+    def __init__(self, name, path, **kwargs):
         super(Database, self).__init__(name, path)
         self.setup_db()
         self.make_pickers()
