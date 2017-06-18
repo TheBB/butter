@@ -154,8 +154,9 @@ def upgrade_pic(pic, u, number, prompt='>>> '):
         print('Have {} {}'.format(
             len(alternatives), p.plural('alternative', len(alternatives)))
         )
-        run_gui(program=UpgradeProgram.factory(pic, *alternatives))
+        ret = run_gui(program=UpgradeProgram.factory(pic, *alternatives))
         pic.db.session.commit()
+    return ret
 
 @main.command()
 @click.option('--samples', '-s', type=int, default=5)
@@ -178,9 +179,10 @@ def tweak(db, samples):
                     pic.mark_tweak(False)
                     break
                 elif s in {'u', 'up', 'upgrade'}:
-                    upgrade_pic(pic, u, samples, prompt=prompt)
-                    pic.mark_tweak(False)
-                    break
+                    upgraded = upgrade_pic(pic, u, samples, prompt=prompt)
+                    if upgraded:
+                        pic.mark_tweak(False)
+                        break
                 elif s in {'d', 'del', 'delete'}:
                     db.delete(pic)
                     break

@@ -174,7 +174,8 @@ class Images(Program):
         self.show_image(m)
 
     @bind()
-    def quit(self, m):
+    def quit(self, m, value=None):
+        m.ret = value
         m.close()
 
 
@@ -184,12 +185,16 @@ class Upgrade(Images):
         super(Upgrade, self).__init__(m, *images)
         self.target = target
 
+    @bind('ESC')
+    def escape(self, m):
+        self.quit(m, False)
+
     @bind('RET')
     def pick(self, m):
         img = self.images[self.index]
         if isinstance(img, str):
             self.target.replace_with(img)
-        self.quit(m)
+        self.quit(m, True)
 
     @bind('d')
     def drop(self, m):

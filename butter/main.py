@@ -15,6 +15,7 @@ class Main:
                 self.cfg = {}
         self.db = db
         self.programs = []
+        self.ret = None
 
     @property
     def program(self):

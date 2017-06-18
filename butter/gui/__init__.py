@@ -132,4 +132,5 @@ def run_gui(*args, **kwargs):
     app = QApplication(sys.argv)
     win = MainWindow(*args, **kwargs)
     win.showMaximized()
-    return app.exec_()
+    app.exec_()
+    return win.ret

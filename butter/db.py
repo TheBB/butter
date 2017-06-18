@@ -174,7 +174,9 @@ class DatabaseLoader(AbstractDatabase):
                 try:
                     if '=' in s:
                         key, value = s.split('=')
-                        pic.assign_field(key, eval(value))
+                        value = value.strip()
+                        if value:
+                            pic.assign_field(key, eval(value))
                     else:
                         value = True
                         if s.startswith('not'):
