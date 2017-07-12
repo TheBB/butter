@@ -134,7 +134,8 @@ class DatabaseLoader(AbstractDatabase):
 
             if stage:
                 for fn in listdir(self.staging_root):
-                    self.flag(join(self.staging_root, fn), db)
+                    if not self.flag(join(self.staging_root, fn), db):
+                        break
 
             db.session.flush()
 
@@ -156,6 +157,7 @@ class DatabaseLoader(AbstractDatabase):
         pic = db.Picture()
         pic.extension = extension[1:]
         modified = False
+        retval = True
         while True:
             s = input('>>> ').strip()
             if s == '':
@@ -164,9 +166,12 @@ class DatabaseLoader(AbstractDatabase):
                 break
             if s == 'view':
                 run_gui(program=Images.factory(fn))
-            elif s in {'skip', 'done'}:
+            elif s in {'skip', 'done', 'abort'}:
                 if s == 'skip':
                     pic = None
+                if s == 'abort':
+                    pic = None
+                    retval = False
                 break
             elif s == '?':
                 print(pic)
@@ -189,6 +194,7 @@ class DatabaseLoader(AbstractDatabase):
 
         if pic:
             self.add_pic(fn, pic, db)
+        return retval
 
     def add_pic(self, fn, pic, db):
         db.session.add(pic)
