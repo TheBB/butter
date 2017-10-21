@@ -35,7 +35,7 @@ KEY_MAP.update({
 class MainWindow(Main, QMainWindow):
 
     def __init__(self, db=None, program=None):
-        Main.__init__(self, db)
+        Main.__init__(self, db=db)
         QMainWindow.__init__(self)
         self.setWindowTitle('Butter')
         self.setStyleSheet('background-color: black;')
@@ -49,8 +49,7 @@ class MainWindow(Main, QMainWindow):
         if db:
             self.picker_dialog = PickerDialog(self.db)
 
-        program = program or self.default_program
-        program(self)
+        (program or Slideshow)(self)
 
     def show_image(self, pic):
         self.current_pic = pic
@@ -133,4 +132,4 @@ def run_gui(*args, **kwargs):
     win = MainWindow(*args, **kwargs)
     win.showMaximized()
     app.exec_()
-    return win.ret
+    return win.retval
