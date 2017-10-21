@@ -220,5 +220,8 @@ class PickOne(Images):
         pic = self.images[self.index]
         pic.db.delete(pic)
         del self.images[self.index]
-        self.index = self.index
-        self.show_image(m)
+        if self.images:
+            self.index = self.index
+            self.show_image(m)
+        else:
+            self.quit(m)
