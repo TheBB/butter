@@ -1,21 +1,22 @@
 from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from os import listdir
-from os.path import basename, exists, join, splitext
+import os.path as path
 from subprocess import run, PIPE
 import re
 import readline
 import sys
 
 import inflect
-from sqlalchemy import create_engine, Boolean, Column, Integer, MetaData, String, Table
+from sqlalchemy import create_engine, Boolean, Column, Integer, MetaData, String, Table, DateTime
 from sqlalchemy.orm import mapper, create_session
 from sqlalchemy.sql import func
 import yaml
 
-from .gui import run_gui
-from .pickers import FilterPicker, RandomPicker, UnionPicker
-from .programs import Images
+import butter.config as config
+from butter.gui import run_gui
+from butter.pickers import FilterPicker, RandomPicker, UnionPicker
+from butter.programs import Images
 
 
 def rsync_dir(source, destination, say=False):
@@ -36,13 +37,17 @@ def rsync_file(source, destination):
 
 class AbstractDatabase:
 
-    def __init__(self, name, path):
+    def __init__(self, name):
         self.name = name
-        self.sql_file = join(path, 'db.sqlite3')
-        self.config_file = join(path, 'config.yaml')
-        self.img_root = join(path, 'contents')
-        self.staging_root = join(path, 'staging')
-        self.path = path
+
+        db_path = path.join(config.data_path, name)
+        self.sql_file = path.join(db_path, 'db.sqlite3')
+        self.config_file = path.join(db_path, 'config.yaml')
+        self.img_path = path.join(db_path, 'contents')
+        self.staging_path = path.join(db_path, 'staging')
+
+        self.path = db_path
+        self.plugin_manager = config.PluginManager()
         self.load_config()
 
     def load_config(self):
@@ -50,12 +55,13 @@ class AbstractDatabase:
             cfg = yaml.load(f)
         self.cfg = cfg
 
-    @property
-    def plugins(self):
         try:
-            return self.cfg['plugins']
+            plugins = cfg['plugins']
         except KeyError:
-            return []
+            pass
+        else:
+            for plugin in plugins:
+                self.plugin_manager.activate(plugin)
 
     @property
     def remote(self):
@@ -67,8 +73,19 @@ class AbstractDatabase:
 
 class DatabaseLoader(AbstractDatabase):
 
-    def __init__(self, name, path):
-        super(DatabaseLoader, self).__init__(name, path)
+    def __init__(self, name):
+        super().__init__(name)
+
+    def __str__(self):
+        return f'DatabaseLoader({self.name})'
+
+    @contextmanager
+    def database(self, *args, commit=True, **kwargs):
+        db = Database(self.path, *args, **kwargs)
+        yield db
+        if commit:
+            db.session.commit()
+        db.close()
 
     def push_config(self):
         if not self.remote:
@@ -84,10 +101,10 @@ class DatabaseLoader(AbstractDatabase):
         print('Synchronizing {}...'.format(self.name))
 
         if pull or push:
-            remote_contents = join(self.remote, 'contents', '')
-            local_contents = join(self.img_root, '')
-            remote_sql = join(self.remote, 'db.sqlite3')
-            remote_config = join(self.remote, 'config.yaml')
+            remote_contents = path.join(self.remote, 'contents', '')
+            local_contents = path.join(self.img_path, '')
+            remote_sql = path.join(self.remote, 'db.sqlite3')
+            remote_config = path.join(self.remote, 'config.yaml')
 
         with self.database(regular=False) as db:
             p = inflect.engine()
@@ -95,7 +112,7 @@ class DatabaseLoader(AbstractDatabase):
             tweak_ids = db.tweak_ids()
             delete_ids = set()
 
-            existing_hd = {join(db.img_root, fn) for fn in listdir(db.img_root)}
+            existing_hd = {path.join(db.img_path, fn) for fn in listdir(db.img_path)}
             existing_db = {pic.filename for pic in db.query()}
 
             deleted_on_hd = existing_db - existing_hd
@@ -112,16 +129,15 @@ class DatabaseLoader(AbstractDatabase):
                 for fn in deleted_in_db:
                     run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
 
-            if pull:
-                print('Fetching data from remote...')
-                rsync_dir(remote_contents, local_contents, say=verbose)
-                rsync_file(remote_sql, self.sql_file)
-                if self.cfg['sync']['sync_config']:
-                    rsync_file(remote_config, self.config_file)
+        if pull:
+            print('Fetching data from remote...')
+            rsync_dir(remote_contents, local_contents, say=verbose)
+            rsync_file(remote_sql, self.sql_file)
+            if self.cfg['sync']['sync_config']:
+                rsync_file(remote_config, self.config_file)
 
         with self.database(regular=False) as db:
             if delete_ids:
-                print(delete_ids)
                 for pic in db.query().filter(db.Picture.id.in_(delete_ids)):
                     print('Deleting', pic.id)
                     db.delete(pic)
@@ -129,7 +145,8 @@ class DatabaseLoader(AbstractDatabase):
 
             if tweak_ids:
                 for pic in db.query().filter(db.Picture.id.in_(tweak_ids)):
-                    pic.mark_tweak()
+                    if pic.updated < tweak_ids[pic.id]:
+                        pic.mark_tweak()
                 db.session.commit()
 
             if stage:
@@ -202,12 +219,6 @@ class DatabaseLoader(AbstractDatabase):
         run(['mv', fn, pic.filename], stdout=PIPE, check=True)
         print('Committed as {}'.format(basename(pic.filename)))
 
-    @contextmanager
-    def database(self, *args, **kwargs):
-        db = database_class(self.name, self.path, *args, **kwargs)
-        yield db
-        db.close()
-
 
 class Field:
 
@@ -243,15 +254,51 @@ class Field:
         return Column(self.key, type_=self.sql_type, nullable=False, default=self.default_value)
 
 
+class Picture:
+
+    @property
+    def filename(self):
+        return path.join(self.root, '{idx:0>8}.{ext}'.format(idx=self.id, ext=self.extension))
+
+    def __repr__(self):
+        return '<Pic {}>'.format(self.filename)
+
+    def assign_field(self, key, value):
+        key = key.strip().lower()
+        for field in self.fields:
+            if field.matches(key):
+                setattr(self, field.key, value)
+                return
+        raise AttributeError("No such field: '{}'".format(key))
+
+    def eval(self, s):
+        return eval(s, self.__dict__)
+
+    def __str__(self):
+        return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
+                         for field in self.fields)
+
+    def mark_tweak(self, value=True):
+        self.tweak = value
+        self.db.session.commit()
+
+    def replace_with(self, fn):
+        _, ext = splitext(fn)
+        run(['rm', self.filename], stdout=PIPE, check=True)
+        self.extension = ext[1:]
+        run(['mv', fn, self.filename], stdout=PIPE, check=True)
+        self.db.session.commit()
+
+
 class Database(AbstractDatabase):
 
-    def __init__(self, name, path, **kwargs):
-        super(Database, self).__init__(name, path)
+    def __init__(self, name, **kwargs):
+        super().__init__(name)
         self.setup_db()
         self.make_pickers()
 
     def __repr__(self):
-        return '<Database {}>'.format(self.name)
+        return f'Database({self.name})'
 
     def close(self):
         pass
@@ -262,61 +309,30 @@ class Database(AbstractDatabase):
         self.cfg = cfg
 
     def setup_db(self):
-        class Picture:
-            root = self.img_root
-            db = self
-            fields = []
-
-            @property
-            def filename(self):
-                return join(self.root, '{idx:0>8}.{ext}'.format(idx=self.id, ext=self.extension))
-
-            def __repr__(self):
-                return '<Pic {}>'.format(self.filename)
-
-            def assign_field(self, key, value):
-                key = key.strip().lower()
-                for field in self.fields:
-                    if field.matches(key):
-                        setattr(self, field.key, value)
-                        return
-                raise AttributeError("No such field: '{}'".format(key))
-
-            def eval(self, s):
-                return eval(s, self.__dict__)
-
-            def __str__(self):
-                return '\n'.join('{} = {}'.format(field.key, getattr(self, field.key))
-                                 for field in self.fields)
-
-            def mark_tweak(self, value=True):
-                self.tweak = value
-                self.db.session.commit()
-
-            def replace_with(self, fn):
-                _, ext = splitext(fn)
-                run(['rm', self.filename], stdout=PIPE, check=True)
-                self.extension = ext[1:]
-                run(['mv', fn, self.filename], stdout=PIPE, check=True)
-                self.db.session.commit()
-
         columns = [
             Column('id', Integer, primary_key=True),
             Column('extension', String, nullable=False),
             Column('tweak', Boolean, nullable=False, default=False),
+            Column('added', DateTime, nullable=False, default=False),
+            Column('updated', DateTime, nullable=False, default=False),
+            Column('hash', Integer, nullable=False, default=False),
         ]
         for c in self.cfg['fields']:
             field = Field(**c)
             columns.append(field.column())
-            Picture.fields.append(field)
+
+        PictureClass = type(
+            'Picture', (Picture,),
+            {'fields': columns, 'db': self, 'root': self.img_path}
+        )
 
         self.engine = create_engine('sqlite:///{}'.format(self.sql_file))
         metadata = MetaData(bind=self.engine)
         table = Table('pictures', metadata, *columns)
         metadata.create_all()
-        mapper(Picture, table)
+        mapper(PictureClass, table)
 
-        self.Picture = Picture
+        self.Picture = PictureClass
         self.update_session()
 
     def update_session(self):
@@ -334,7 +350,7 @@ class Database(AbstractDatabase):
         return self.query().filter(self.Picture.tweak == True)
 
     def tweak_ids(self):
-        return {p.id for p in self.tweak_pics()}
+        return {p.id: p.updated for p in self.tweak_pics()}
 
     def delete(self, pic):
         if exists(pic.filename):
