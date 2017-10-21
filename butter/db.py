@@ -1,11 +1,11 @@
 from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
-from os import listdir
+from datetime import datetime
+import os
 import os.path as path
 from subprocess import run, PIPE
-import re
-import readline
 import sys
+import re
 
 import inflect
 from sqlalchemy import create_engine, Boolean, Column, Integer, MetaData, String, Table, DateTime
@@ -41,9 +41,9 @@ class AbstractDatabase:
         self.name = name
 
         db_path = path.join(config.data_path, name)
-        self.sql_file = path.join(db_path, 'db.sqlite3')
-        self.config_file = path.join(db_path, 'config.yaml')
-        self.img_path = path.join(db_path, 'contents')
+        self.local_sql = path.join(db_path, 'db.sqlite3')
+        self.local_config = path.join(db_path, 'config.yaml')
+        self.local_contents = path.join(db_path, 'contents', '')
         self.staging_path = path.join(db_path, 'staging')
 
         self.path = db_path
@@ -51,7 +51,7 @@ class AbstractDatabase:
         self.load_config()
 
     def load_config(self):
-        with open(self.config_file, 'r') as f:
+        with open(self.local_config, 'r') as f:
             cfg = yaml.load(f)
         self.cfg = cfg
 
@@ -87,24 +87,37 @@ class DatabaseLoader(AbstractDatabase):
             db.session.commit()
         db.close()
 
+    @property
+    def remote_config(self):
+        return path.join(self.remote, 'config.yaml')
+
+    @property
+    def remote_contents(self):
+        return path.join(self.remote, 'contents', '')
+
+    @property
+    def remote_sql(self):
+        return path.join(self.remote, 'db.sqlite3')
+
     def push_config(self):
-        if not self.remote:
-            return
-        remote_config = join(self.remote, 'config.yaml')
-        rsync_file(self.config_file, remote_config)
+        rsync_file(self.local_config, self.remote_config)
+
+    def _pull(self, verbose):
+        print('Fetching data from remote...')
+        rsync_dir(self.remote_contents, self.local_contents, say=verbose)
+        rsync_file(self.remote_sql, self.local_sql)
+        if self.cfg['sync']['sync_config']:
+            rsync_file(self.remote_config, self.local_config)
+
+    def _push(self, verbose):
+        print('Sending data to remote...')
+        rsync_dir(self.local_contents, self.remote_contents, say=verbose)
+        rsync_file(self.local_sql, self.remote_sql)
+        if self.cfg['sync']['sync_config']:
+            rsync_file(self.local_config, self.remote_config)
 
     def sync(self, push=True, pull=True, stage=True, verbose=False):
-        if not self.remote:
-            push = False
-            pull = False
-
-        print('Synchronizing {}...'.format(self.name))
-
-        if pull or push:
-            remote_contents = path.join(self.remote, 'contents', '')
-            local_contents = path.join(self.img_path, '')
-            remote_sql = path.join(self.remote, 'db.sqlite3')
-            remote_config = path.join(self.remote, 'config.yaml')
+        print(f'Synchronizing {self.name}...')
 
         with self.database(regular=False) as db:
             p = inflect.engine()
@@ -112,7 +125,7 @@ class DatabaseLoader(AbstractDatabase):
             tweak_ids = db.tweak_ids()
             delete_ids = set()
 
-            existing_hd = {path.join(db.img_path, fn) for fn in listdir(db.img_path)}
+            existing_hd = {path.join(db.local_contents, fn) for fn in os.listdir(db.local_contents)}
             existing_db = {pic.filename for pic in db.query()}
 
             deleted_on_hd = existing_db - existing_hd
@@ -120,21 +133,17 @@ class DatabaseLoader(AbstractDatabase):
                 n = len(deleted_on_hd)
                 print('{} {} deleted from disk, deleting also from database'.format(n, p.plural('image', n)))
                 for c in deleted_on_hd:
-                    delete_ids.add(int(splitext(basename(c))[0]))
+                    delete_ids.add(int(path.splitext(path.basename(c))[0]))
 
             deleted_in_db = existing_hd - existing_db
             if deleted_in_db or verbose:
                 n = len(deleted_in_db)
                 print('{} {} deleted from database, re-staging'.format(n, p.plural('image', n)))
                 for fn in deleted_in_db:
-                    run(['mv', fn, join(self.staging_root, basename(fn))], stdout=PIPE, check=True)
+                    run(['mv', fn, join(self.staging_path, path.basename(fn))], stdout=PIPE, check=True)
 
-        if pull:
-            print('Fetching data from remote...')
-            rsync_dir(remote_contents, local_contents, say=verbose)
-            rsync_file(remote_sql, self.sql_file)
-            if self.cfg['sync']['sync_config']:
-                rsync_file(remote_config, self.config_file)
+        if pull and self.remote:
+            self._pull(verbose)
 
         with self.database(regular=False) as db:
             if delete_ids:
@@ -150,24 +159,24 @@ class DatabaseLoader(AbstractDatabase):
                 db.session.commit()
 
             if stage:
-                for fn in listdir(self.staging_root):
-                    if not self.flag(join(self.staging_root, fn), db):
+                for fn in os.listdir(self.staging_path):
+                    fn = path.join(self.staging_path, fn)
+                    try:
+                        pic = self._flag(fn, db)
+                        if pic:
+                            self.add_pic(fn, pic, db)
+                    except KeyboardInterrupt:
                         break
 
             db.session.flush()
 
-            if push:
-                print('Sending data to remote...')
-                rsync_dir(local_contents, remote_contents, say=verbose)
-                rsync_file(self.sql_file, remote_sql)
-                if self.cfg['sync']['sync_config']:
-                    rsync_file(self.config_file, remote_config)
+        if push and self.remote:
+            self._push(verbose)
 
-
-    def flag(self, fn, db):
+    def _flag(self, fn, db):
         print('Staged: {}'.format(fn))
         run_gui(program=Images.factory(fn))
-        extension = splitext(fn)[-1].lower()
+        extension = path.splitext(fn)[-1].lower()
         if extension == '.jpeg':
             extension = '.jpg'
 
@@ -178,18 +187,15 @@ class DatabaseLoader(AbstractDatabase):
         while True:
             s = input('>>> ').strip()
             if s == '':
-                if not modified:
-                    pic = None
-                break
-            if s == 'view':
+                if modified:
+                    return pic
+                return None
+            elif s == 'view':
                 run_gui(program=Images.factory(fn))
-            elif s in {'skip', 'done', 'abort'}:
-                if s == 'skip':
-                    pic = None
-                if s == 'abort':
-                    pic = None
-                    retval = False
-                break
+            elif s == 'skip':
+                return None
+            elif s == 'done':
+                return pic
             elif s == '?':
                 print(pic)
             else:
@@ -206,18 +212,16 @@ class DatabaseLoader(AbstractDatabase):
                             s = s[3:]
                         pic.assign_field(s, value)
                         modified = True
-                except AttributeError as e:
+                except Exception as e:
                     print(e)
 
-        if pic:
-            self.add_pic(fn, pic, db)
-        return retval
-
     def add_pic(self, fn, pic, db):
+        pic.added = datetime.now()
+        pic.updated = datetime.now()
         db.session.add(pic)
         db.session.commit()
         run(['mv', fn, pic.filename], stdout=PIPE, check=True)
-        print('Committed as {}'.format(basename(pic.filename)))
+        print('Committed as {}'.format(path.basename(pic.filename)))
 
 
 class Field:
@@ -280,10 +284,11 @@ class Picture:
 
     def mark_tweak(self, value=True):
         self.tweak = value
+        self.updated = datetime.now()
         self.db.session.commit()
 
     def replace_with(self, fn):
-        _, ext = splitext(fn)
+        _, ext = path.splitext(fn)
         run(['rm', self.filename], stdout=PIPE, check=True)
         self.extension = ext[1:]
         run(['mv', fn, self.filename], stdout=PIPE, check=True)
@@ -304,7 +309,7 @@ class Database(AbstractDatabase):
         pass
 
     def load_config(self):
-        with open(self.config_file, 'r') as f:
+        with open(self.local_config, 'r') as f:
             cfg = yaml.load(f)
         self.cfg = cfg
 
@@ -317,16 +322,15 @@ class Database(AbstractDatabase):
             Column('updated', DateTime, nullable=False, default=False),
             Column('hash', Integer, nullable=False, default=False),
         ]
-        for c in self.cfg['fields']:
-            field = Field(**c)
-            columns.append(field.column())
+        fields = [Field(**c) for c in self.cfg['fields']]
+        columns.extend(f.column() for f in fields)
 
         PictureClass = type(
             'Picture', (Picture,),
-            {'fields': columns, 'db': self, 'root': self.img_path}
+            {'fields': fields, 'db': self, 'root': self.local_contents}
         )
 
-        self.engine = create_engine('sqlite:///{}'.format(self.sql_file))
+        self.engine = create_engine('sqlite:///{}'.format(self.local_sql))
         metadata = MetaData(bind=self.engine)
         table = Table('pictures', metadata, *columns)
         metadata.create_all()

@@ -37,7 +37,7 @@ class Program(metaclass=ProgramMeta):
 
     def __init__(self, m):
         self.m = m
-        m.register(self)
+        m.push(self)
 
     def key(self, m, key):
         if key in self.keymap:
@@ -114,7 +114,7 @@ class Slideshow(FromPicker):
             self.picker = picker
         self.pic(m)
 
-    @bind('t')
+    @bind('c')
     def automate(self, m):
         if self.timer:
             self.timer.stop()
@@ -175,7 +175,7 @@ class Images(Program):
 
     @bind()
     def quit(self, m, value=None):
-        m.ret = value
+        m.retval = value
         m.close()
 
 

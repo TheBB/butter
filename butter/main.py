@@ -1,21 +1,12 @@
-from .programs import Slideshow
+from butter.programs import Slideshow
 
 
 class Main:
 
-    default_program = Slideshow
-
-    def __init__(self, db=None, cfg=None):
-        if cfg:
-            self.cfg = cfg
-        else:
-            try:
-                self.cfg = db.cfg
-            except AttributeError:
-                self.cfg = {}
+    def __init__(self, db=None):
         self.db = db
         self.programs = []
-        self.ret = None
+        self.retval = None
 
     @property
     def program(self):
@@ -24,13 +15,13 @@ class Main:
         except IndexError:
             return None
 
-    def register(self, program):
+    def push(self, program):
         if self.program:
             self.program.make_uncurrent(self)
         self.programs.append(program)
         self.status_message(program.message)
 
-    def unregister(self, program, *args, **kwargs):
+    def pop(self, program, *args, **kwargs):
         assert program is self.program
         self.programs.pop()
         if self.program:
@@ -38,19 +29,22 @@ class Main:
             self.status_message(self.program.message)
 
     def show_image(self, pic):
-        pass
+        raise NotImplementedError
 
     def status_message(self, msg):
-        pass
+        return self._status_message
+
+    def _status_message(self, msg):
+        raise NotImplementedError
 
     def popup_message(self, msg, align='center'):
-        return None
+        raise NotImplementedError
 
     def get_picker(self):
-        return None
+        raise NotImplementedError
 
     def start_timer(self, delay, callback):
-        return None
+        raise NotImplementedError
 
     def __getitem__(self, key):
-        return self.cfg[key]
+        return self.db.cfg[key]
