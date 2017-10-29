@@ -1,13 +1,15 @@
 from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import datetime
+import imagehash
+from PIL import Image
+import inflect
 import os
 import os.path as path
 from subprocess import run, PIPE
 import sys
 import re
-
-import inflect
+import numpy as np
 from sqlalchemy import create_engine, Boolean, Column, Integer, MetaData, String, Table, DateTime
 from sqlalchemy.orm import mapper, create_session
 from sqlalchemy.sql import func
@@ -17,6 +19,14 @@ import butter.config as config
 from butter.gui import run_gui
 from butter.pickers import FilterPicker, RandomPicker, UnionPicker
 from butter.programs import Images
+
+
+def tonk(s):
+    return int(sum(j<<i for i,j in enumerate(s.hash.flatten().astype('i8')[::-1])))
+
+
+def untonk(s):
+    return np.unpackbits(np.array([s], dtype='>i8').view(np.uint8))
 
 
 def rsync_dir(source, destination, say=False):
@@ -47,21 +57,12 @@ class AbstractDatabase:
         self.staging_path = path.join(db_path, 'staging')
 
         self.path = db_path
-        self.plugin_manager = config.PluginManager()
         self.load_config()
 
     def load_config(self):
         with open(self.local_config, 'r') as f:
             cfg = yaml.load(f)
         self.cfg = cfg
-
-        try:
-            plugins = cfg['plugins']
-        except KeyError:
-            pass
-        else:
-            for plugin in plugins:
-                self.plugin_manager.activate(plugin)
 
     @property
     def remote(self):
@@ -74,14 +75,26 @@ class AbstractDatabase:
 class DatabaseLoader(AbstractDatabase):
 
     def __init__(self, name):
+        self.plugin_manager = config.PluginManager(self)
         super().__init__(name)
+
+    def load_config(self):
+        super().load_config()
+
+        try:
+            plugins = self.cfg['plugins']
+        except KeyError:
+            pass
+        else:
+            for plugin in plugins:
+                self.plugin_manager.activate(plugin)
 
     def __str__(self):
         return f'DatabaseLoader({self.name})'
 
     @contextmanager
     def database(self, *args, commit=True, **kwargs):
-        db = Database(self.path, *args, **kwargs)
+        db = Database(self.path, self.plugin_manager, *args, **kwargs)
         yield db
         if commit:
             db.session.commit()
@@ -173,9 +186,26 @@ class DatabaseLoader(AbstractDatabase):
         if push and self.remote:
             self._push(verbose)
 
-    def _flag(self, fn, db):
+    def _flag(self, fn, db, threshold=9):
         print('Staged: {}'.format(fn))
         run_gui(program=Images.factory(fn))
+
+        this_hash = imagehash.phash(Image.open(fn))
+        collisions = [pic for pic in db.query() if pic - this_hash <= threshold]
+        if collisions:
+            input(f'{len(collisions)} collisions found...')
+            run_gui(program=Images.factory(fn, *collisions))
+            choice = input('(r) replace, (d) delete, (s) skip, (a) add anyway ').strip().lower()[0]
+            if choice == 'd':
+                run(['rm', fn])
+                return None
+            if choice == 's':
+                return None
+            if choice == 'r':
+                for pic in collisions:
+                    db.delete(pic)
+                db.session.commit()
+
         extension = path.splitext(fn)[-1].lower()
         if extension == '.jpeg':
             extension = '.jpg'
@@ -218,6 +248,7 @@ class DatabaseLoader(AbstractDatabase):
     def add_pic(self, fn, pic, db):
         pic.added = datetime.now()
         pic.updated = datetime.now()
+        pic.hash = tonk(imagehash.phash(Image.open(fn)))
         db.session.add(pic)
         db.session.commit()
         run(['mv', fn, pic.filename], stdout=PIPE, check=True)
@@ -267,6 +298,13 @@ class Picture:
     def __repr__(self):
         return '<Pic {}>'.format(self.filename)
 
+    def __sub__(self, other):
+        if isinstance(other, Picture):
+            return np.count_nonzero(untonk(self.hash) != untonk(other.hash))
+        elif isinstance(other, imagehash.ImageHash):
+            return np.count_nonzero(untonk(self.hash) != untonk(tonk(other)))
+        return NotImplemented
+
     def assign_field(self, key, value):
         key = key.strip().lower()
         for field in self.fields:
@@ -297,7 +335,8 @@ class Picture:
 
 class Database(AbstractDatabase):
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, plugin_manager, **kwargs):
+        self.plugin_manager = plugin_manager
         super().__init__(name)
         self.setup_db()
         self.make_pickers()
@@ -357,7 +396,7 @@ class Database(AbstractDatabase):
         return {p.id: p.updated for p in self.tweak_pics()}
 
     def delete(self, pic):
-        if exists(pic.filename):
+        if path.exists(pic.filename):
             run(['rm', pic.filename], check=True)
         self.session.delete(pic)
         self.session.commit()

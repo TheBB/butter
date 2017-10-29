@@ -1,46 +1,41 @@
 import click
 import functools
+import sys
 
 from butter.gui import run_gui
 import butter.config as config
-from butter.db import DatabaseLoader
+from butter.plugin import db_argument, default_loader
 
 
-class DatabaseLoaderType(click.ParamType):
-    name = 'database'
+class PluginCommands(click.MultiCommand):
 
-    def __init__(self):
-        super().__init__()
+    def list_commands(self, ctx):
+        db = default_loader()
+        if db is None:
+            return []
+        return db.plugin_manager.list_commands()
 
-    def convert(self, value, param, ctx):
-        if isinstance(value, DatabaseLoader):
-            return value
-        try:
-            return DatabaseLoader(value)
-        except Exception as e:
-            self.fail(f"Failed to open database: '{value}': {e}")
+    def get_command(self, ctx, name):
+        db = default_loader()
+        return db.plugin_manager.command(name)
 
-db_argument = functools.partial(
-    click.argument, type=DatabaseLoaderType(), default=config.default_database
-)
+plugin_cmds = PluginCommands()
 
 
-@click.group(invoke_without_command=True)
-@click.pass_context
-def main(ctx):
+@click.group()
+def builtin_cmds():
     """Extensible image database."""
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(gui)
+    pass
 
 
-@main.command('list')
+@builtin_cmds.command('list')
 def list_dbs():
     """Show a list of databases."""
     for db in config.databases:
         print(db)
 
 
-@main.command()
+@builtin_cmds.command()
 @db_argument('loader')
 def status(loader):
     """Show basic information about a database."""
@@ -48,7 +43,7 @@ def status(loader):
         print(db)
 
 
-@main.command()
+@builtin_cmds.command()
 @db_argument('loader')
 def gui(loader):
     """Launch the GUI."""
@@ -56,7 +51,7 @@ def gui(loader):
        run_gui(db=db)
 
 
-@main.command()
+@builtin_cmds.command()
 @click.option('--push/--no-push', default=True)
 @click.option('--pull/--no-pull', default=True)
 @click.option('--stage/--no-stage', default=True)
@@ -67,11 +62,30 @@ def sync(loader, **kwargs):
     loader.sync(**kwargs)
 
 
-@main.command('push-config')
+@builtin_cmds.command('push-config')
 @db_argument('loader')
 def push_config(loader):
     """Push config to remote."""
     loader.push_config()
+
+
+def main():
+    try:
+        if len(sys.argv) > 1 and sys.argv[1].startswith('-d'):
+            config.default_database = sys.argv[1][2:]
+            sys.argv = [sys.argv[0]] + sys.argv[2:]
+            assert config.default_database in config.databases
+        elif len(sys.argv) > 2 and sys.argv[1] == '--db':
+            config.default_database = sys.argv[2]
+            sys.argv = [sys.argv[0]] + sys.argv[3:]
+            assert config.default_database in config.databases
+    except AssertionError:
+        print(f"Unknown database: '{config.default_database}'")
+
+    if len(sys.argv) == 1:
+        sys.argv.append('gui')
+
+    click.CommandCollection(name='Butter', sources=[builtin_cmds, plugin_cmds])()
 
 
 if __name__ == '__main__':
