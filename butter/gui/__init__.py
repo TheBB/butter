@@ -49,6 +49,8 @@ class MainWindow(Main, QMainWindow):
         if db:
             self.picker_dialog = PickerDialog(self.db)
 
+        if program is None and db is not None:
+            program = db.plugin_manager.get_default_program()
         (program or Slideshow)(self)
 
     def show_image(self, pic):
