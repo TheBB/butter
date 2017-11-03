@@ -7,7 +7,6 @@ import inflect
 import os
 import os.path as path
 from subprocess import run, PIPE
-import sys
 import re
 import numpy as np
 from sqlalchemy import create_engine, Boolean, Column, Integer, MetaData, String, Table, DateTime
@@ -15,10 +14,8 @@ from sqlalchemy.orm import mapper, create_session
 from sqlalchemy.sql import func
 import yaml
 
-import butter.config as config
-from butter.gui import run_gui
+from butter import plugin, config, interface
 from butter.pickers import FilterPicker, RandomPicker, UnionPicker
-from butter.programs import Images
 
 
 def tonk(s):
@@ -75,7 +72,9 @@ class AbstractDatabase:
 class DatabaseLoader(AbstractDatabase):
 
     def __init__(self, name):
-        self.plugin_manager = config.PluginManager(self)
+        self.plugin_manager = plugin.PluginManager(self)
+        self.db = None
+        self.db_count = 0
         super().__init__(name)
 
     def load_config(self):
@@ -92,13 +91,23 @@ class DatabaseLoader(AbstractDatabase):
     def __str__(self):
         return f'DatabaseLoader({self.name})'
 
+    def close(self):
+        self.plugin_manager.deactivate_all()
+
     @contextmanager
     def database(self, *args, commit=True, **kwargs):
-        db = Database(self.path, self.plugin_manager, *args, **kwargs)
-        yield db
-        if commit:
-            db.session.commit()
-        db.close()
+        if not self.db:
+            self.db = Database(self.path, self.plugin_manager, *args, **kwargs)
+
+        self.db_count += 1
+        yield self.db
+        self.db_count -= 1
+
+        if self.db_count == 0:
+            if commit:
+                self.db.session.commit()
+            self.db.close()
+            self.db = None
 
     @property
     def remote_config(self):
@@ -135,7 +144,7 @@ class DatabaseLoader(AbstractDatabase):
         with self.database(regular=False) as db:
             p = inflect.engine()
 
-            tweak_ids = db.tweak_ids()
+            pre_tweak = {pic.id: (pic.tweak, pic.updated) for pic in db.query()}
             delete_ids = set()
 
             existing_hd = {path.join(db.local_contents, fn) for fn in os.listdir(db.local_contents)}
@@ -165,17 +174,20 @@ class DatabaseLoader(AbstractDatabase):
                     db.delete(pic)
                 db.session.commit()
 
-            if tweak_ids:
-                for pic in db.query().filter(db.Picture.id.in_(tweak_ids)):
-                    if pic.updated < tweak_ids[pic.id]:
-                        pic.mark_tweak()
-                db.session.commit()
+            for pic in db.query().filter(db.Picture.id.in_(pre_tweak)):
+                tweak, updated = pre_tweak[pic.id]
+                if pic.updated < updated:
+                    pic.tweak = tweak
+                    pic.updated = updated
+            db.session.commit()
 
             if stage:
                 for fn in os.listdir(self.staging_path):
                     fn = path.join(self.staging_path, fn)
                     try:
-                        pic = self._flag(fn, db)
+                        if not interface.collision_check(db, fn):
+                            break
+                        pic = interface.populate(db, fn)
                         if pic:
                             self.add_pic(fn, pic, db)
                     except KeyboardInterrupt:
@@ -186,65 +198,6 @@ class DatabaseLoader(AbstractDatabase):
         if push and self.remote:
             self._push(verbose)
 
-    def _flag(self, fn, db, threshold=9):
-        print('Staged: {}'.format(fn))
-        run_gui(program=Images.factory(fn))
-
-        this_hash = imagehash.phash(Image.open(fn))
-        collisions = [pic for pic in db.query() if pic - this_hash <= threshold]
-        if collisions:
-            input(f'{len(collisions)} collisions found...')
-            run_gui(program=Images.factory(fn, *collisions))
-            choice = input('(r) replace, (d) delete, (s) skip, (a) add anyway ').strip().lower()[0]
-            if choice == 'd':
-                run(['rm', fn])
-                return None
-            if choice == 's':
-                return None
-            if choice == 'r':
-                for pic in collisions:
-                    db.delete(pic)
-                db.session.commit()
-
-        extension = path.splitext(fn)[-1].lower()
-        if extension == '.jpeg':
-            extension = '.jpg'
-
-        pic = db.Picture()
-        pic.extension = extension[1:]
-        modified = False
-        retval = True
-        while True:
-            s = input('>>> ').strip()
-            if s == '':
-                if modified:
-                    return pic
-                return None
-            elif s == 'view':
-                run_gui(program=Images.factory(fn))
-            elif s == 'skip':
-                return None
-            elif s == 'done':
-                return pic
-            elif s == '?':
-                print(pic)
-            else:
-                try:
-                    if '=' in s:
-                        key, value = s.split('=')
-                        value = value.strip()
-                        if value:
-                            pic.assign_field(key, eval(value))
-                    else:
-                        value = True
-                        if s.startswith('not'):
-                            value = False
-                            s = s[3:]
-                        pic.assign_field(s, value)
-                        modified = True
-                except Exception as e:
-                    print(e)
-
     def add_pic(self, fn, pic, db):
         pic.added = datetime.now()
         pic.updated = datetime.now()
@@ -252,6 +205,7 @@ class DatabaseLoader(AbstractDatabase):
         db.session.add(pic)
         db.session.commit()
         run(['mv', fn, pic.filename], stdout=PIPE, check=True)
+        self.plugin_manager.add_succeeded(pic)
         print('Committed as {}'.format(path.basename(pic.filename)))
 
 
@@ -426,7 +380,3 @@ class Database(AbstractDatabase):
         for spec in self.cfg['pickers']:
             name, filters = next(iter(spec.items()))
             self.pickers[name] = self.picker(filters)
-
-
-loader_class = DatabaseLoader
-database_class = Database
