@@ -49,7 +49,7 @@ def populate(db, filename):
                 return pic
             return None
         elif s == 'view':
-            gui.run_gui(program=Images.factory(filename))
+            gui.run_gui(program=programs.Images.factory(filename))
         elif s == 'skip':
             return None
         elif s == 'done':

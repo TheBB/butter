@@ -186,7 +186,7 @@ class DatabaseLoader(AbstractDatabase):
                     fn = path.join(self.staging_path, fn)
                     try:
                         if not interface.collision_check(db, fn):
-                            break
+                            continue
                         pic = interface.populate(db, fn)
                         if pic:
                             self.add_pic(fn, pic, db)
