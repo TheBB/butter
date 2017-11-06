@@ -162,7 +162,7 @@ class DatabaseLoader(AbstractDatabase):
                 n = len(deleted_in_db)
                 print('{} {} deleted from database, re-staging'.format(n, p.plural('image', n)))
                 for fn in deleted_in_db:
-                    run(['mv', fn, join(self.staging_path, path.basename(fn))], stdout=PIPE, check=True)
+                    run(['mv', fn, path.join(self.staging_path, path.basename(fn))], stdout=PIPE, check=True)
 
         if pull and self.remote:
             self._pull(verbose)
@@ -174,7 +174,9 @@ class DatabaseLoader(AbstractDatabase):
                     db.delete(pic)
                 db.session.commit()
 
-            for pic in db.query().filter(db.Picture.id.in_(pre_tweak)):
+            for pic in db.query():
+                if pic.id not in pre_tweak:
+                    continue
                 tweak, updated = pre_tweak[pic.id]
                 if pic.updated < updated:
                     pic.tweak = tweak
