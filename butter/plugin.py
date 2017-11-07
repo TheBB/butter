@@ -68,7 +68,11 @@ class PluginManager(yapsy.PluginManager):
     def activate(self, name):
         if name in self._plugins:
             return
-        self.getPluginByName(name, 'all').plugin_object.manager = self
+        obj = self.getPluginByName(name, 'all')
+        if obj is None:
+            print(f'Unable to find plugin: {name}')
+            return
+        obj.plugin_object.manager = self
         obj = self._plugins[name] = self.activatePluginByName(name, 'all')
         for cmd in obj.commands:
             self._commands[cmd.name] = cmd
