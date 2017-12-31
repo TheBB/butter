@@ -6,7 +6,7 @@ class Main:
     def __init__(self, db=None):
         self.db = db
         self.programs = []
-        self.retval = None
+        self.retval = {}
 
     @property
     def program(self):
@@ -21,8 +21,9 @@ class Main:
         self.programs.append(program)
         self.status_message(program.message)
 
-    def pop(self, program, *args, **kwargs):
+    def pop(self, program, **kwargs):
         assert program is self.program
+        self.retval = kwargs
         self.programs.pop()
         if self.program:
             self.program.make_current(self)
