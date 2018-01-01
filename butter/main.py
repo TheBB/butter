@@ -3,10 +3,11 @@ from butter.programs import Slideshow
 
 class Main:
 
-    def __init__(self, db=None):
+    def __init__(self, db=None, safe=True):
         self.db = db
         self.programs = []
         self.retval = {}
+        self.safe = safe
 
     @property
     def program(self):
@@ -30,6 +31,11 @@ class Main:
             self.status_message(self.program.message)
 
     def show_image(self, pic):
+        if self.safe:
+            return
+        self._show_image(pic)
+
+    def _show_image(self, pic):
         raise NotImplementedError
 
     def status_message(self, msg):

@@ -34,8 +34,8 @@ KEY_MAP.update({
 
 class MainWindow(Main, QMainWindow):
 
-    def __init__(self, db=None, program=None):
-        Main.__init__(self, db=db)
+    def __init__(self, db=None, program=None, safe=False):
+        Main.__init__(self, db=db, safe=safe)
         QMainWindow.__init__(self)
         self.setWindowTitle('Butter')
         self.setStyleSheet('background-color: black;')
@@ -53,7 +53,7 @@ class MainWindow(Main, QMainWindow):
             program = db.plugin_manager.get_default_program()
         (program or Slideshow)(self)
 
-    def show_image(self, pic):
+    def _show_image(self, pic):
         self.current_pic = pic
         self.main.load(pic)
 
@@ -97,6 +97,11 @@ class MainWindow(Main, QMainWindow):
         if ctrl:
             text = 'C-{}'.format(text)
 
+        if text == 'z':
+            if not self.safe:
+                self.show_image(None)
+            self.safe = not self.safe
+
         if text == 'p':
             if self.paused:
                 self.main.load(self.current_pic)
@@ -129,9 +134,9 @@ class MainWindow(Main, QMainWindow):
         self.program.key(self, text)
 
 
-def run_gui(*args, **kwargs):
+def run_gui(*args, safe=False, **kwargs):
     app = QApplication(sys.argv)
-    win = MainWindow(*args, **kwargs)
+    win = MainWindow(*args, safe=safe, **kwargs)
     win.showMaximized()
     app.exec_()
     return win.retval

@@ -45,10 +45,11 @@ def status(loader):
 
 @builtin_cmds.command()
 @db_argument('loader')
-def gui(loader):
+@click.option('--safe/--no-safe', default=False)
+def gui(loader, safe):
     """Launch the GUI."""
     with loader.database() as db:
-       run_gui(db=db)
+       run_gui(db=db, safe=safe)
 
 
 @builtin_cmds.command()
