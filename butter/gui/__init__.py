@@ -1,35 +1,14 @@
 from operator import methodcaller
 import sys
-from string import ascii_lowercase
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QDialog, QMainWindow, QMessageBox
 
-from .utils import MainWidget, MessageDialog, PickerDialog
+from .utils import MainWidget, MessageDialog, PickerDialog, key_to_text
 from ..main import Main
 from ..programs import Slideshow
 
-
-KEY_MAP = {
-    Qt.Key_Space: 'SPC',
-    Qt.Key_Escape: 'ESC',
-    Qt.Key_Tab: 'TAB',
-    Qt.Key_Return: 'RET',
-    Qt.Key_Backspace: 'BSP',
-    Qt.Key_Delete: 'DEL',
-    Qt.Key_Up: 'UP',
-    Qt.Key_Down: 'DOWN',
-    Qt.Key_Left: 'LEFT',
-    Qt.Key_Right: 'RIGHT',
-    Qt.Key_Minus: '-',
-    Qt.Key_Plus: '+',
-    Qt.Key_Equal: '=',
-}
-KEY_MAP.update({
-    getattr(Qt, 'Key_{}'.format(s.upper())): s
-    for s in ascii_lowercase
-})
 
 
 class MainWindow(Main, QMainWindow):
@@ -82,20 +61,7 @@ class MainWindow(Main, QMainWindow):
         return timer
 
     def keyPressEvent(self, event):
-        ctrl = event.modifiers() & Qt.ControlModifier
-        shift = event.modifiers() & Qt.ShiftModifier
-
-        try:
-            text = KEY_MAP[event.key()]
-        except KeyError:
-            return
-
-        if shift and text.isupper():
-            text = 'S-{}'.format(text)
-        elif shift:
-            text = text.upper()
-        if ctrl:
-            text = 'C-{}'.format(text)
+        text = key_to_text(event)
 
         if text == 'z':
             if not self.safe:
@@ -114,7 +80,7 @@ class MainWindow(Main, QMainWindow):
             self.paused = not self.paused
             return
 
-        if text.lower() in {'t'}:
+        if text and (text.lower() in {'t'}):
             attr = {
                 't': 'mark_tweak'
             }[text.lower()]
