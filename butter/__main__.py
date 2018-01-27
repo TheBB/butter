@@ -70,6 +70,13 @@ def push_config(loader):
     loader.push_config()
 
 
+@builtin_cmds.command('pull-config')
+@db_argument('loader')
+def pull_config(loader):
+    """Pull config from remote."""
+    loader.pull_config()
+
+
 def main():
     try:
         if len(sys.argv) > 1 and sys.argv[1].startswith('-d'):

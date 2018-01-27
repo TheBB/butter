@@ -124,6 +124,9 @@ class DatabaseLoader(AbstractDatabase):
     def push_config(self):
         rsync_file(self.local_config, self.remote_config)
 
+    def pull_config(self):
+        rsync_file(self.remote_config, self.local_config)
+
     def _pull(self, verbose):
         print('Fetching data from remote...')
         rsync_dir(self.remote_contents, self.local_contents, say=verbose)
