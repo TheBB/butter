@@ -1,7 +1,7 @@
 import imagehash
 import os.path as path
 from PIL import Image
-from subprocess import run
+from subprocess import run, PIPE
 
 from butter import gui, programs
 
@@ -30,14 +30,26 @@ def collision_check(db, filename, threshold=9):
     return True
 
 
+def get_extension(filename):
+    data = run(['file', filename], stdout=PIPE).stdout.decode()
+    if 'JPEG' in data:
+        return 'jpg'
+    elif 'PNG' in data:
+        return 'png'
+    elif 'GIF' in data:
+        return 'gif'
+    return None
+
+
 def populate(db, filename):
-    print('Staged: {}'.format(filename))
+    print(f'Staged: {filename}')
 
     gui.run_gui(program=programs.Images.factory(filename))
 
-    extension = path.splitext(filename)[-1].lower()
-    if extension == '.jpeg':
-        extension = '.jpg'
+    extension = get_extension(filename)
+    if not extension:
+        print('Unable to decide filetype')
+        return None
 
     pic = db.Picture()
     pic.extension = extension[1:]
