@@ -25,5 +25,6 @@ setup(
         'sqlalchemy',
         'selenium',
         'tqdm',
+        'yapsy',
     ],
 )

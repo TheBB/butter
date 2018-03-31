@@ -71,17 +71,21 @@ class AbstractDatabase:
 
 class DatabaseLoader(AbstractDatabase):
 
-    def __init__(self, name):
+    def __init__(self, name, plugins=None):
         self.plugin_manager = plugin.PluginManager(self)
         self.db = None
         self.db_count = 0
+        self.explicit_plugins = plugins
         super().__init__(name)
 
     def load_config(self):
         super().load_config()
 
         try:
-            plugins = self.cfg['plugins']
+            if self.explicit_plugins is not None:
+                plugins = self.explicit_plugins
+            else:
+                plugins = self.cfg['plugins']
         except KeyError:
             pass
         else:
