@@ -97,7 +97,8 @@ class MainWindow(Main, QMainWindow):
         if self.paused:
             return
 
-        self.program.key(self, text)
+        if text is not None:
+            self.program.key(self, text)
 
 
 def run_gui(*args, safe=False, **kwargs):
