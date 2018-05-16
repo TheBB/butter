@@ -33,11 +33,11 @@ def collision_check(db, filename, threshold=9):
 def get_extension(filename):
     data = run(['file', filename], stdout=PIPE).stdout.decode()
     if 'JPEG' in data:
-        return 'jpg'
+        return '.jpg'
     elif 'PNG' in data:
-        return 'png'
+        return '.png'
     elif 'GIF' in data:
-        return 'gif'
+        return '.gif'
     return None
 
 
