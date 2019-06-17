@@ -58,7 +58,7 @@ class AbstractDatabase:
 
     def load_config(self):
         with open(self.local_config, 'r') as f:
-            cfg = yaml.load(f)
+            cfg = yaml.load(f, Loader=yaml.Loader)
         self.cfg = cfg
 
     @property
@@ -312,7 +312,7 @@ class Database(AbstractDatabase):
 
     def load_config(self):
         with open(self.local_config, 'r') as f:
-            cfg = yaml.load(f)
+            cfg = yaml.load(f, Loader=yaml.Loader)
         self.cfg = cfg
 
     def setup_db(self):
