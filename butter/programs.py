@@ -2,6 +2,8 @@ from collections import namedtuple
 from os.path import basename
 from random import choice
 
+from .pickers import TraversePicker
+
 
 BoundFunction = namedtuple('BoundFunction', ['keys', 'fn'])
 
@@ -85,10 +87,25 @@ class FromPicker(Program):
     @bind()
     def pic(self, m, set_msg=True, pic=None):
         pic = pic or self.picker.get()
+        if pic is None:
+            m.pop(self)
+            return
         m.show_image(pic)
         if set_msg:
-            self.message = '{}'.format(pic.id)
+            self.message = f'{pic.id:08}'
         return pic
+
+    @bind('E')
+    def traverse(self, m):
+        traverse = TraversePicker(self.picker)
+        Traverse(m, traverse)
+
+
+class Traverse(FromPicker):
+
+    @bind('E')
+    def untraverse(self, m):
+        m.pop(self)
 
 
 class Slideshow(FromPicker):

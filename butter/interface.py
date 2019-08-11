@@ -38,6 +38,8 @@ def get_extension(filename):
         return '.png'
     elif 'GIF' in data:
         return '.gif'
+    elif 'Web/P' in data:
+        return '.webp'
     return None
 
 

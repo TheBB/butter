@@ -28,6 +28,18 @@ class RandomPicker(FilterPicker):
         super(RandomPicker, self).__init__(db)
 
 
+class TraversePicker:
+
+    def __init__(self, picker):
+        self.pics = iter(picker.get_all())
+
+    def get(self):
+        try:
+            return next(self.pics)
+        except:
+            return None
+
+
 class UnionPicker:
 
     def __init__(self, db):

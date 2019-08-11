@@ -193,13 +193,15 @@ class DatabaseLoader(AbstractDatabase):
             if stage:
                 for fn in os.listdir(self.staging_path):
                     fn = path.join(self.staging_path, fn)
+                    if not os.path.isfile(fn):
+                        continue
                     try:
                         if not interface.collision_check(db, fn):
                             continue
                         pic = interface.populate(db, fn)
                         if pic:
                             self.add_pic(fn, pic, db)
-                    except KeyboardInterrupt:
+                    except (KeyboardInterrupt, EOFError):
                         break
 
             db.session.flush()
