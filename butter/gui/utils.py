@@ -111,10 +111,16 @@ class MainWidget(QWidget):
         self.mplayer.setVideoOutput(self.video)
 
         self.mplayer.error.connect(lambda: print("Video:", self.mplayer.errorString()))
+        self.mplayer.mediaStatusChanged.connect(self.state_changed)
+
+    def state_changed(self, state):
+        if state == QMediaPlayer.EndOfMedia:
+            self.mplayer.setPosition(0)
+            self.mplayer.play()
 
     def load(self, pic, *args, **kwargs):
         if isinstance(pic, str):
-            still = path.splitext(pic)[1].lower() in ('webm',)
+            still = path.splitext(pic)[1].lower()[1:] not in ('webm', 'mp4')
         else:
             still = pic.is_still
 

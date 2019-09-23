@@ -46,6 +46,8 @@ def get_extension(filename):
         return '.webp'
     elif 'WebM' in data:
         return '.webm'
+    elif 'MP4' in data:
+        return '.mp4'
     return None
 
 
@@ -61,7 +63,7 @@ def populate(db, filename):
 
     pic = db.Picture()
     pic.extension = extension[1:]
-    pic.is_still = pic.extension not in ('webm',)
+    pic.is_still = pic.extension not in ('webm', 'mp4')
     modified = False
     while True:
         s = input('>>> ').strip()
