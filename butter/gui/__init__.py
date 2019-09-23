@@ -100,6 +100,10 @@ class MainWindow(Main, QMainWindow):
         if text is not None:
             self.program.key(self, text)
 
+    def close(self):
+        self.main.halt()
+        super().close()
+
 
 def run_gui(*args, safe=False, **kwargs):
     app = QApplication(sys.argv)

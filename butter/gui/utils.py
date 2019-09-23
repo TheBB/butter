@@ -128,7 +128,7 @@ class MainWidget(QWidget):
             self.image.load(pic, *args, **kwargs)
             self.video.hide()
             self.image.show()
-            self.mplayer.pause()
+            self.mplayer.stop()
         else:
             url = pic if isinstance(pic, str) else pic.filename
             self.mplayer.setMedia(QMediaContent(QUrl.fromLocalFile(url)))
@@ -138,6 +138,9 @@ class MainWidget(QWidget):
 
     def message(self, msg):
         self.label.setText('<div align="center">{}</div>'.format(msg))
+
+    def halt(self):
+        self.mplayer.stop()
 
 
 class ButtonsWidget(QWidget):
