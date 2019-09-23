@@ -212,7 +212,10 @@ class DatabaseLoader(AbstractDatabase):
     def add_pic(self, fn, pic, db):
         pic.added = datetime.now()
         pic.updated = datetime.now()
-        pic.hash = tonk(imagehash.phash(Image.open(fn)))
+        if pic.is_still:
+            pic.hash = tonk(imagehash.phash(Image.open(fn)))
+        else:
+            pic.hash = 0
         db.session.add(pic)
         db.session.commit()
         run(['mv', fn, pic.filename], stdout=PIPE, check=True)
@@ -325,6 +328,7 @@ class Database(AbstractDatabase):
             Column('added', DateTime, nullable=False, default=False),
             Column('updated', DateTime, nullable=False, default=False),
             Column('hash', Integer, nullable=False, default=False),
+            Column('is_still', Boolean, nullable=False, default=True),
         ]
         fields = [Field(**c) for c in self.cfg['fields']]
         columns.extend(f.column() for f in fields)

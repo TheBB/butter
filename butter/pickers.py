@@ -1,5 +1,5 @@
 from itertools import repeat
-from random import uniform
+from random import uniform, random
 
 from sqlalchemy.sql import func
 
@@ -11,7 +11,11 @@ class FilterPicker:
         self.db = db
 
     def get(self):
-        return self.db.query().filter(*self.filters).order_by(func.random()).first()
+        if random() < 0.5:
+            pic = self.db.query().filter(*self.filters).order_by(func.random()).first()
+        else:
+            pic = self.db.query().filter(self.db.Picture.is_still==False).order_by(func.random()).first()
+        return pic
 
     def get_all(self):
         return self.db.query().filter(*self.filters)

@@ -7,7 +7,11 @@ from butter import gui, programs
 
 
 def collision_check(db, filename, threshold=9):
-    this_hash = imagehash.phash(Image.open(filename))
+    try:
+        this_hash = imagehash.phash(Image.open(filename))
+    except OSError:
+        return True
+
     collisions = [pic for pic in db.query() if pic - this_hash <= threshold]
 
     if collisions:
@@ -40,6 +44,8 @@ def get_extension(filename):
         return '.gif'
     elif 'Web/P' in data:
         return '.webp'
+    elif 'WebM' in data:
+        return '.webm'
     return None
 
 
@@ -55,6 +61,7 @@ def populate(db, filename):
 
     pic = db.Picture()
     pic.extension = extension[1:]
+    pic.is_still = pic.extension not in ('webm',)
     modified = False
     while True:
         s = input('>>> ').strip()

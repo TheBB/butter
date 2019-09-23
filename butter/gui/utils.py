@@ -1,8 +1,11 @@
 from string import ascii_lowercase
 import sys
+from os import path
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QFont, QPixmap
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtWidgets import (
     QCheckBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QLayout, QMainWindow,
     QPushButton, QSizePolicy, QSlider, QSpinBox, QVBoxLayout, QWidget
@@ -89,6 +92,7 @@ class MainWidget(QWidget):
         super(MainWidget, self).__init__()
 
         self.image = ImageView()
+        self.video = QVideoWidget()
         self.label = QLabel()
         self.label.setMaximumHeight(25)
         self.label.setStyleSheet('color: rgb(200, 200, 200);')
@@ -100,10 +104,31 @@ class MainWidget(QWidget):
 
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.image)
+        self.layout().addWidget(self.video)
         self.layout().addWidget(self.label)
 
-    def load(self, *args, **kwargs):
-        self.image.load(*args, **kwargs)
+        self.mplayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
+        self.mplayer.setVideoOutput(self.video)
+
+        self.mplayer.error.connect(lambda: print("Video:", self.mplayer.errorString()))
+
+    def load(self, pic, *args, **kwargs):
+        if isinstance(pic, str):
+            still = path.splitext(pic)[1].lower() in ('webm',)
+        else:
+            still = pic.is_still
+
+        if still:
+            self.image.load(pic, *args, **kwargs)
+            self.video.hide()
+            self.image.show()
+            self.mplayer.pause()
+        else:
+            url = pic if isinstance(pic, str) else pic.filename
+            self.mplayer.setMedia(QMediaContent(QUrl.fromLocalFile(url)))
+            self.mplayer.play()
+            self.image.hide()
+            self.video.show()
 
     def message(self, msg):
         self.label.setText('<div align="center">{}</div>'.format(msg))
