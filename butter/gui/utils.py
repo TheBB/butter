@@ -132,6 +132,7 @@ class MainWidget(QWidget):
         else:
             url = pic if isinstance(pic, str) else pic.filename
             self.mplayer.setMedia(QMediaContent(QUrl.fromLocalFile(url)))
+            self.mplayer.setMuted(True)
             self.mplayer.play()
             self.image.hide()
             self.video.show()
