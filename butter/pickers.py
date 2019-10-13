@@ -11,11 +11,7 @@ class FilterPicker:
         self.db = db
 
     def get(self):
-        if random() < 0.5:
-            pic = self.db.query().filter(*self.filters).order_by(func.random()).first()
-        else:
-            pic = self.db.query().filter(self.db.Picture.is_still==False).order_by(func.random()).first()
-        return pic
+        return self.db.query().filter(*self.filters).order_by(func.random()).first()
 
     def get_all(self):
         return self.db.query().filter(*self.filters)
