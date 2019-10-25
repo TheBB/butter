@@ -103,9 +103,32 @@ class FromPicker(Program):
 
 class Traverse(FromPicker):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.history = []
+        self.index = -1
+
     @bind('E')
     def untraverse(self, m):
         m.pop(self)
+
+    @bind('BSP')
+    def prev(self, m):
+        if self.index < 1:
+            return None
+        self.index -= 1
+        super().pic(m, pic=self.history[self.index])
+
+    @bind()
+    def pic(self, *args, **kwargs):
+        if self.index == len(self.history) - 1:
+            pic = super().pic(*args, **kwargs)
+            self.history.append(pic)
+            self.index += 1
+        else:
+            self.index += 1
+            pic = self.history[self.index]
+            return super().pic(*args, **kwargs, pic=pic)
 
 
 class Slideshow(FromPicker):
