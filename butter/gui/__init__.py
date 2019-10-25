@@ -63,6 +63,11 @@ class MainWindow(Main, QMainWindow):
     def keyPressEvent(self, event):
         text = key_to_text(event)
 
+        if text == 'DEL':
+            with open('marked.txt', 'a') as f:
+                f.write(f'{self.current_pic.filename}\n')
+            return
+
         if text == 'z':
             if not self.safe:
                 self.show_image(None)
