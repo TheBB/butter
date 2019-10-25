@@ -8,7 +8,8 @@ from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtWidgets import (
     QCheckBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QLayout, QMainWindow,
-    QPushButton, QSizePolicy, QSlider, QSpinBox, QVBoxLayout, QWidget
+    QPushButton, QSizePolicy, QSlider, QSpinBox, QVBoxLayout, QWidget,
+    QGraphicsBlurEffect,
 )
 
 from ..pickers import UnionPicker
@@ -91,8 +92,14 @@ class MainWidget(QWidget):
     def __init__(self):
         super(MainWidget, self).__init__()
 
+        self._blur = QGraphicsBlurEffect()
+        self._blur.setBlurRadius(0)
+
         self.image = ImageView()
+        self.image.setGraphicsEffect(self._blur)
+
         self.video = QVideoWidget()
+
         self.label = QLabel()
         self.label.setMaximumHeight(25)
         self.label.setStyleSheet('color: rgb(200, 200, 200);')
@@ -117,6 +124,14 @@ class MainWidget(QWidget):
         if state == QMediaPlayer.EndOfMedia:
             self.mplayer.setPosition(0)
             self.mplayer.play()
+
+    @property
+    def blur(self):
+        return self._blur.blurRadius()
+
+    @blur.setter
+    def blur(self, value):
+        self._blur.setBlurRadius(value)
 
     def load(self, pic, *args, **kwargs):
         if isinstance(pic, str):

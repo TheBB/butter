@@ -109,6 +109,14 @@ class MainWindow(Main, QMainWindow):
         self.main.halt()
         super().close()
 
+    @property
+    def blur(self):
+        return self.main.blur
+
+    @blur.setter
+    def blur(self, value):
+        self.main.blur = value
+
 
 def run_gui(*args, safe=False, **kwargs):
     app = QApplication(sys.argv)
