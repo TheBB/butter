@@ -20,11 +20,11 @@ setup(
         'inflect',
         'pillow',
         'pyqt5',
-        'pyxdg',
         'requests',
         'sqlalchemy',
         'selenium',
         'tqdm',
+        'xdg',
         'yapsy',
     ],
 )
