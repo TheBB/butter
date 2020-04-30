@@ -1,5 +1,6 @@
 import imagehash
 import os.path as path
+from os import unlink
 from PIL import Image
 from subprocess import run, PIPE
 
@@ -70,6 +71,9 @@ def populate(db, filename):
         if s == '':
             if modified:
                 return pic
+            return None
+        elif s == 'del':
+            unlink(filename)
             return None
         elif s == 'view':
             gui.run_gui(program=programs.Images.factory(filename))
