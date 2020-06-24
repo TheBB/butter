@@ -32,6 +32,9 @@ class MainWindow(Main, QMainWindow):
             program = db.plugin_manager.get_default_program()
         (program or Slideshow)(self)
 
+    def flash(self, msg):
+        self.main.flash(msg)
+
     def _show_image(self, pic):
         self.current_pic = pic
         self.main.load(pic)

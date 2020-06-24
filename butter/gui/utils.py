@@ -120,6 +120,20 @@ class MainWidget(QWidget):
         self.mplayer.error.connect(lambda: print("Video:", self.mplayer.errorString()))
         self.mplayer.mediaStatusChanged.connect(self.state_changed)
 
+        self.overlay = QLabel(self)
+        self.overlay.setFrameStyle(Qt.FramelessWindowHint)
+        self.overlay.setStyleSheet('background-color: rgba(0,0,0,0.7); color: rgba(200,200,200,1);')
+        self.overlay.setFont(font)
+        self.overlay.setVisible(False)
+        self.overlay.setWordWrap(True)
+
+    def resize(self):
+        self.overlay.setGeometry(0, 3*self.height()//4 - 50, self.width(), 100)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.resize()
+
     def state_changed(self, state):
         if state == QMediaPlayer.EndOfMedia:
             self.mplayer.setPosition(0)
@@ -137,7 +151,7 @@ class MainWidget(QWidget):
         if isinstance(pic, str):
             still = path.splitext(pic)[1].lower()[1:] not in ('webm', 'mp4')
         else:
-            still = pic.is_still
+            still = pic.is_still if pic else True
 
         if still:
             self.image.load(pic, *args, **kwargs)
@@ -152,8 +166,14 @@ class MainWidget(QWidget):
             self.image.hide()
             self.video.show()
 
+        self.overlay.setVisible(False)
+
     def message(self, msg):
         self.label.setText('<div align="center">{}</div>'.format(msg))
+
+    def flash(self, msg):
+        self.overlay.setText('<div align="center">{}</div>'.format(msg))
+        self.overlay.setVisible(True)
 
     def halt(self):
         self.mplayer.stop()
